@@ -6,19 +6,24 @@
 #endif
 
 std::function< int () > MakeFunction() {
-	return [] {
+    return [] {
 	    return __cplusplus;
 	};
 }
 
 std::function< int () > MakeCounter1(int c) {
-    return [=]() mutable { return c++; };
+    return [=]() mutable { 
+        std::cout << (void*) &MakeCounter1 << std::endl;
+        return c++; };
 }
 
 std::function< int () > MakeCounter2() {
     int i = 0;
-    return [=]() mutable { return i++; };
+    return [=]() mutable { 
+        std::cout << &MakeCounter2 << std::endl;
+        return i++; };
 }
+
 
 int main(int, char**) {
     std::cout << MakeFunction()() << std::endl;	
