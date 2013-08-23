@@ -1,10 +1,6 @@
 #include <iostream>
 #include <cassert>
 
-//TODO: 
-// USE SWAP IN ASSIGNMENT OPERATORS
-// MAKE POLICIES TEMPLATED ON TYPES
-
 template <typename T>
 struct ResourceProxy {
       T* res_;
@@ -20,32 +16,25 @@ class ResourceHandler :
     ResetPolicy {
 public:
     ResourceHandler(ResourceHandler& rh) : res_(rh.res_) {
-        rh.res_ = T(ResetPolicy::Reset());
-        //need to qualify the Reset method: since it does not depend
-        //on any template parameter the compiler will complain that a 
-        //declaration must be available
+        rh.res_ = Reset(rh.res_);
     }	
     ResourceHandler(T res) : res_(res) {}
     ResourceHandler(ResourceProxy<T> rm) : res_(*rm.res_) {
         std::cout << this << " Creation from proxy" << std::endl;
-        *rm.res_ = T(ResetPolicy::Reset());
-        //need to qualify the Reset method: since it does not depend
-        //on any template parameter the compiler will complain that a 
-        //declaration must be available
+        *rm.res_ = Reset(*rm.res_);
     }
     ResourceHandler& operator=(ResourceHandler& rh) {
-        if(Valid(res_)) Dispose(res_);
-        res_ = rh.res_;
-        rh.res_ = T(ResetPolicy::Reset());
+        swap(ResourceHandler(rh));
         return *this;
     }
     ResourceHandler& operator=(ResourceProxy<T> rp) {
-        if(Valid(res_)) Dispose(res_);
-        res_ = *rp.res_;
-        *rp.res_ = T(ResetPolicy::Reset());
+        ResourceHandler(rp).swap(*this);
         return *this;
     }
-    operator ResourceProxy<T>() /*const*/ {
+    void swap(ResourceHandler& rh) {
+        std::swap(res_, rh.res_);
+    }
+    operator ResourceProxy<T>()  {
         std::cout << this << " Conversion to proxy" << std::endl;
         ResourceProxy<T>  p; p.res_ = &res_;
         return p;
@@ -60,17 +49,20 @@ private:
     T res_;    
 };
 struct PointerDispose {
-    void Dispose(void* p) {
+    template < typename T >
+    void Dispose(T* p) {
         delete p;
     }
 };
 struct PointerValid {
-    bool Valid(void* p) {
+    template < typename T >
+    bool Valid(T* p) {
         return p != 0; 
     }
 };
 struct PointerReset {
-    void* Reset() {
+    template < typename T >
+    T* Reset(const T*) {
         return 0;
     }
 };
