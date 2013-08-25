@@ -16,12 +16,12 @@ class ResourceHandler :
     ResetPolicy {
 public:
     ResourceHandler(ResourceHandler& rh) : res_(rh.res_) {
-        rh.res_ = Reset(rh.res_);
+        rh.res_ = ResetPolicy::Reset(rh.res_);
     }	
     ResourceHandler(T res) : res_(res) {}
     ResourceHandler(ResourceProxy<T> rm) : res_(*rm.res_) {
         std::cout << this << " Creation from proxy" << std::endl;
-        *rm.res_ = Reset(*rm.res_);
+        *rm.res_ = ResetPolicy::Reset(*rm.res_);
     }
     ResourceHandler& operator=(ResourceHandler& rh) {
         swap(ResourceHandler(rh));
@@ -36,14 +36,15 @@ public:
     }
     operator ResourceProxy<T>()  {
         std::cout << this << " Conversion to proxy" << std::endl;
-        ResourceProxy<T>  p; p.res_ = &res_;
+        ResourceProxy<T>  p; 
+        p.res_ = &res_;
         return p;
     }
     T& res() { return res_; }
     const T& res() const { return res_; }
 	~ResourceHandler() {
-        if(Valid(res_))
-            Dispose(res_); 
+        if(ValidPolicy::Valid(res_))
+            DisposePolicy::Dispose(res_); 
 	}
 private:
     T res_;    
