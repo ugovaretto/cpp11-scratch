@@ -1,0 +1,53 @@
+Ownership transfer with move semantics
+--------------------------------------
+
+Move semantics refers to the act of copying a resource handler
+from a source object to a target object and reset the source object reference to
+an "invalid" or "empty" state to prevent the source object destructor to release
+the resource when the source object is destroyed.
+Move semantics is implemented in the form of move constructors and assignment
+operators.
+
+Move semantics is useful to avoid the copy of heap allocated data when the 
+source object is going to be destroyed anyway after the copy
+(e.g. when returned from functions) and it is required to allow proper ownership
+transfer to resource (e.g. socket, file, thread) wrapping objects stored into 
+STL containers.
+
+<CODE>
+class Object {
+  char* data_;
+  Object(Object& other) : data_(other.data_) {
+      other.data_ = 0;
+  }
+  Object& operator=(Object& other) {
+      ...
+  }   
+};
+</CODE>
+
+Since regular copy constructors and assignment operators take as an input 
+parameter a constant reference to an object they cannot be used to reset 
+the resource contained into the source object.
+Using a copy constructor and assignment operator that take non-const object
+references works when the rvalue is non-temporary which rules
+out objects returned from functions.
+
+The trick, known as the Colvin and Gibbons trick, to implement move semantics
+in pre C++ 11 code is:
+- create a resource wrapper object which contains a reference to the resource
+  to transfer; note that in case an object has a mix of resource handlers and
+  regular data members the resource wrapper needs to contain references to all
+  the data members or simply a pointer/reference to the object itself
+- add a constructor taking the resource wrapper object by value
+- add an assignment operator taking a resource wrapper object by value
+- add a conversion operator which returns an instance of the wrapper object
+
+
+A configurable generic resource handler class is presented below, policy based
+design is used to separate concerns.
+
+The move constructor approach can be used regardless of resource handlers to
+speed up constructors and assignment operators through the use of a move
+function which takes an object reference as input and returns a resource wrapper
+as output.
