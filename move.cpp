@@ -49,19 +49,14 @@ public:
         if(ValidPolicy::Valid(res_))
             DisposePolicy::Dispose(res_); 
 	}
-    // In order to implement a move operation for temporaries
-    // returned from functions we would have to do something like:
-    // friend ResourceProxy move(const ResourceHandler& rh) {
-    //     ResourceProxy p = { &const_cast<ResourceHandler&>(rh).res_};
-    //     return p;
-    // }
 private:
     T res_;    
 };
 #else //proxy wraps entire object
 //Resource handler with proxy wrapper wrapping entire resource handler object;
 //useful when resource handler objects contain additional data members that
-//need to be copied
+//need to be copied, in this case a counter for the number of times the
+//resource is moved
 template< typename T, 
           typename DisposePolicy, 
           typename ValidPolicy,
@@ -109,12 +104,6 @@ public:
         if(ValidPolicy::Valid(res_))
             DisposePolicy::Dispose(res_); 
     }
-    // In order to implement a move operation for temporaries
-    // returned from functions we would have to do something like:
-    // friend ResourceProxy move(const ResourceHandler& rh) {
-    //     ResourceProxy p = {const_cast<ResourceHandler*>(&rh)};
-    //     return p;
-    // }
 private:
     T res_;
     int moves_;    
