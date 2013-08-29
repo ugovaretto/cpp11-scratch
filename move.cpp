@@ -74,32 +74,32 @@ public:
     typedef ValidPolicyT ValidPolicy;
     typedef ResetPolicyT ResetPolicy;
 public:
-    ResourceHandler(ResourceHandler& rh) : 
-        res_(rh.res_), moves_(++rh.moves_) {
-        rh.res_ = ResetPolicy::Reset(rh.res_);
-    }   
     ResourceHandler(T res) : res_(res), moves_(0) {}
+    // ResourceHandler(const ResourceProxy& crm) : 
+    //     res_(crm.rh->res_),
+    //     moves_(crm.rh->moves_ + 1) {
+    //     std::cout << this << " Creation from proxy" << std::endl;
+    //     ResourceProxy& rm = const_cast< ResourceProxy& >(crm);
+    //     rm.rh->res_ = ResetPolicy::Reset(rm.rh->res_);
+    // }
     ResourceHandler(ResourceProxy rm) : 
         res_(rm.rh->res_),
-        moves_(++rm.rh->moves_) {
+        moves_(rm.rh->moves_ + 1) {
         std::cout << this << " Creation from proxy" << std::endl;
         rm.rh->res_ = ResetPolicy::Reset(rm.rh->res_);
     }
-    ResourceHandler& operator=(ResourceHandler& rh) {
-        swap(ResourceHandler(rh));
-        return *this;
-    }
-    ResourceHandler& operator=(ResourceProxy rp) {
+    ResourceHandler& operator=(const ResourceProxy& rp) {
+        std::cout << "Assignment" << std::endl;
         ResourceHandler(rp).swap(*this);
         return *this;
     }
     void swap(ResourceHandler& rh) {
-        std::swap(res_, rh.res_);
-        std::swap(moves_, rh.moves_);
+         std::swap(res_, rh.res_);
+         std::swap(moves_, rh.moves_);
     }
-    operator ResourceProxy()  {
+    operator ResourceProxy()  const {
         std::cout << this << " Conversion to proxy" << std::endl;
-        ResourceProxy p = {this};
+        ResourceProxy p = {const_cast< ResourceHandler* >(this)};
         return p;
     }
     void reset() {
@@ -124,9 +124,10 @@ public:
     friend
     typename ResourceHandler<U, D, V, R>::ResourceProxy
     move(const ResourceHandler<U, D, V, R>& crm) {
-        ResourceHandler<U, D, V, R>& rm = 
+       ResourceHandler<U, D, V, R>& rm = 
             const_cast< ResourceHandler<U, D, V, R>& >(crm);
-        typename ResourceHandler<U, D, V, R>::ResourceProxy rp = {&rm};
+        typename ResourceHandler<U, D, V, R>::ResourceProxy rp;
+        rp.rh = &rm;
         return rp;
     } 
 private:
@@ -197,31 +198,36 @@ IH foo() {
     return IH(new int(4));
 }
 
+void bar(const IH& ih) {
+    std::cout << ih.res() << std::endl;
+}
+
 //------------------------------------------------------------------------------
 int main(int, char**) {
-    PointerHandler<int>::type pi(new int(2));
-    assert(*pi.res() == 2);
-    PointerHandler<int>::type pi2(pi);
-    assert(pi.res() == 0);
-    assert(*pi2.res() == 2);
-    IH pi3 = foo();
-    pi3 = foo();
-    std::vector< IH > phandlers;
-    phandlers.push_back(move(pi2));
-    assert(*phandlers.back().res() == 2);
+//     PointerHandler<int>::type pi(new int(2));
+//     assert(*pi.res() == 2);
+//     PointerHandler<int>::type pi2(move(pi));
+//     assert(pi.res() == 0);
+//     assert(*pi2.res() == 2);
+//     IH pi3 = foo();
+//     pi3 = foo();
+//     bar(move(IH(new int(5))));
+     std::vector< IH > phandlers;
+//     phandlers.push_back(move(pi2));
+//     assert(*phandlers.back().res() == 2);
     phandlers.push_back(move(IH(new int(123))));
-    assert(*phandlers.back().res() == 123);
-#ifndef WRAP_RESOURCE
-    assert(phandlers[0].moves() == 4);
-    PointerHandler<int>::type pi4(move(phandlers[0]));
-    assert(*pi4.res() == 2);
-    assert(pi2.res() == 0);
-    assert(pi4.moves() == 5);
-    assert(pi3.moves() == 2);
-    // foo -> temporary: 1 move
-    // temporary -> proxy
-    // proxy -> pre-existing instance = operator: +1 move
-#endif
+//     assert(*phandlers.back().res() == 123);
+// #ifndef WRAP_RESOURCE
+//     assert(phandlers[0].moves() == 4);
+//     PointerHandler<int>::type pi4(move(phandlers[0]));
+//     assert(*pi4.res() == 2);
+//     assert(pi2.res() == 0);
+//     assert(pi4.moves() == 5);
+//     assert(pi3.moves() == 2);
+//     // foo -> temporary: 1 move
+//     // temporary -> proxy
+//     // proxy -> pre-existing instance = operator: +1 move
+//#endif
     return 0;
 }
 
