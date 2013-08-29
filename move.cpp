@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <vector>
 
 
 //Resoure handler with resource-only wrapper used for move operations
@@ -58,16 +59,20 @@ private:
 //need to be copied, in this case a counter for the number of times the
 //resource is moved
 template< typename T, 
-          typename DisposePolicy, 
-          typename ValidPolicy,
-          typename ResetPolicy>
+          typename DisposePolicyT, 
+          typename ValidPolicyT,
+          typename ResetPolicyT>
 class ResourceHandler : 
-    DisposePolicy, 
-    ValidPolicy,
-    ResetPolicy {
+    DisposePolicyT, 
+    ValidPolicyT,
+    ResetPolicyT {
     struct ResourceProxy {
         ResourceHandler* rh;
     };
+public:    
+    typedef DisposePolicyT DisposePolicy;
+    typedef ValidPolicyT ValidPolicy;
+    typedef ResetPolicyT ResetPolicy;
 public:
     ResourceHandler(ResourceHandler& rh) : 
         res_(rh.res_), moves_(++rh.moves_) {
@@ -97,13 +102,33 @@ public:
         ResourceProxy p = {this};
         return p;
     }
+    void reset() {
+        res_ = ResetPolicy::Reset(res_);
+    }
     T& res() { return res_; }
     const T& res() const { return res_; }
     int moves() const { return moves_; }
     ~ResourceHandler() {
         if(ValidPolicy::Valid(res_))
-            DisposePolicy::Dispose(res_); 
+            DisposePolicy::Dispose(res_);
     }
+    template < typename U, typename D, typename V, typename R >
+    friend
+    typename ResourceHandler<U, D, V, R>::ResourceProxy
+    move(ResourceHandler<U, D, V, R>& rm)  {
+        typename ResourceHandler<U, D, V, R>::ResourceProxy rp = {&rm};
+        return rp;
+    } 
+    //used ONLY to move from *temporary* object cast to const &
+    template < typename U, typename D, typename V, typename R >
+    friend
+    typename ResourceHandler<U, D, V, R>::ResourceProxy
+    move(const ResourceHandler<U, D, V, R>& crm) {
+        ResourceHandler<U, D, V, R>& rm = 
+            const_cast< ResourceHandler<U, D, V, R>& >(crm);
+        typename ResourceHandler<U, D, V, R>::ResourceProxy rp = {&rm};
+        return rp;
+    } 
 private:
     T res_;
     int moves_;    
@@ -111,7 +136,8 @@ private:
 #endif
 
 //------------------------------------------------------------------------------
-//Policy implementation for pointer and number types
+//Policy implementation for pointer and number types, static method are
+//required to make it
 
 struct PointerDispose {
     template < typename T >
@@ -134,12 +160,13 @@ struct PointerReset {
 
 struct NumDispose {
     template < typename T >
-    void Dispose(T n) {} //could be close(n) for sockets or file descriptors
+    void Dispose(T n) {} 
+    //could be close(n) for sockets or file descriptors
 };
 struct NumValid {
     template < typename T >
     bool Valid(T n) {
-        return p != T(0); 
+        return n != T(0); 
     }
 };
 struct NumReset {
@@ -179,13 +206,17 @@ int main(int, char**) {
     assert(*pi2.res() == 2);
     IH pi3 = foo();
     pi3 = foo();
+    std::vector< IH > phandlers;
+    phandlers.push_back(move(pi2));
+    assert(*phandlers.back().res() == 2);
+    phandlers.push_back(move(IH(new int(123))));
+    assert(*phandlers.back().res() == 123);
 #ifndef WRAP_RESOURCE
-    assert(pi2.moves() == 1);
-    PointerHandler<int>::type pi4(pi2);
+    assert(phandlers[0].moves() == 4);
+    PointerHandler<int>::type pi4(move(phandlers[0]));
     assert(*pi4.res() == 2);
     assert(pi2.res() == 0);
-    assert(pi4.moves() == 2);
-
+    assert(pi4.moves() == 5);
     assert(pi3.moves() == 2);
     // foo -> temporary: 1 move
     // temporary -> proxy

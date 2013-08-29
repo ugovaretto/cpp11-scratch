@@ -1,0 +1,77 @@
+When you need to automatically manage the run-time lifetime of resources you can either choose reference counting where multiple references to the same resource exist or transfer ownership at each copy (assignment) and only have a single reference to a resource at any given time.
+
+The two approaches result in a completely different set of implementation challenges:
+<ul>
+  <li>Shared ownership: serialized access to the reference counter and possibly the resource itself (through e.g. overloading of the -&gt; operator, subject of a future post)</li>
+  <li>Single ownership: copy construction from a non-const object to allow the reset of the resource reference in the source object</li>
+</ul>
+
+This post describes a possible implementation in both <em>C++98</em> and <em>C++11</em> for a resource handler with ownership transfer similar to <tt>auto_ptr</tt>/<tt>unique_ptr</tt> to be used for resources such as file descriptors/streams, sockets and threads. Note that ownership transfer is also useful when transferring pointers to heap allocated memory to avoid reallocating memory and copying data in cases where the source buffer is destroyed anyway after the copy.
+
+<h2>A minimal resource handler</h2>
+
+A resource handling class shall accept a resource reference in its constructor and destroy it in the destructor.
+e.g.
+<script class="light: true; brush: cpp;" type="syntaxhighlighter"><![CDATA[
+template <typename T>
+class MemoryHandler {
+private:
+  //disable assignment
+  MemoryHandler& operator=(const MemoryHandler&);
+  //disable copy construction
+  MemoryHandler(const MemoryHandler& );
+public:
+  MemoryHandler(T* ptr) : ptr_(ptr) {}
+  T* ptr() { return ptr_; }
+  ~MemoryHandler() { delete ptr_; }
+private:
+  T* ptr_;
+};
+]]></script>
+
+This class can already be used to perform simple scope-based resource management: the rsource is deleted when the handler goes out of scope.
+
+<script class="brush: cpp; light: true" type="syntaxhighlighter">
+void PrintCppStd() {
+  MemoryHandler< Printer > mh(new Printer("remote printer 1"));
+  Printer p = mh.ptr();
+  p->Print("./ISO_IEC_14882-2011.pdf");  
+} //resource automatically destroyed by MemoryHandler destructor
+</script>
+
+The resource is destroyed by the <tt>Printer</tt> destructor when the instance goes out of scope, this means that there must be only a single instance of MemoryHandler pointing to the Printer instance, if multiple instances of MemoryHandler pointing to the same Printer instance exist they will all try to delete the same resource resulting in a run-time error. 
+To enforce the single-ownership policy copy construction and assignment are explicitly forbidden by declaring the copy constructor and assignment operator as private members of the class.
+
+<h2>Ownership transfer</h2>
+
+Ownership transfer is needed when resource handlers are returned by functions and the returned temporary object must be copied to another object.
+
+In order to allow ownership transfer we need to implement a <em>proper</em> copy constructor and assignment operator.
+Note that assignment and construction must not only copy the resource pointer but also notify the source object that it has lost ownership of the resource and must not try to dispose it.
+To "notify" the source object of lost ownership we "simply" reset its inner <tt>ptr_</tt> pointer to 0.
+
+Implementing a copy constructor is easy: just use a non-const reference instead of a const reference. A copy constructor without a const reference can be used only with a pre-existing non-temporary instance of another object; temporary objects can only be passed to const references, unfortunately the main reason for which we need ownership transfer is exactly to assign temporary objects returned from functions.
+
+The way to implement proper ownership transfer is to create a new wrapper/proxy type that wraps the resource handler and make two additions to the class:
+<ol>
+  <li>an operator that returns a instance of a resource wrapper type</li>
+  <li>a constructor that accepts an instance of the resource wrapper type returned by the operator (1)</li>
+</ol>
+
+<h2>Move semantics</h2>
+
+Move semantics refers to the act of moving the content of an object into another object without performing explicit copies.
+
+A typical case where move semantics is useful is copying from a temporary object (e.g. returned from a function) that contains a heap allocated pointer as a member variable: since the allocated memory is going to be released after the copy, instead of performing allocate-copy-free operations it is much better to simply copy the pointer into the new object and reset the pointer of the temporary source object to 0 so that memory is not released when the temporary object goes out of scope.
+
+A typical case where move semantics is required is storing resource handlers requiring single ownership (e.g. threads and sockets) into standard library containers. When adding an element through e.g. <tt>std::vector::push_back</tt> the element has to have its internal handler moved to the object stored into the container.
+
+Move semantics is if fact implemented in terms of ownership transfer as a copy and reset operation applied to resource handlers.
+
+
+
+
+
+
+
+
