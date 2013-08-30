@@ -10,11 +10,15 @@ private:
         T* ptr;  
     };
 public:
-    MemoryHandler(const Proxy& p) : ptr_(p.ptr) {}
-    MemoryHandler(MemoryHandler& mh) : ptr_(mh.ptr_) {
+    MemoryHandler(const MemoryHandler& mh) : ptr_(0), moved_(true) {
+        if(!mh.moved_) assert(false);
+        mh.MoveTo(*this);
+    }
+    MemoryHandler(const Proxy& p) : ptr_(p.ptr), moved_(true) {}
+    MemoryHandler(MemoryHandler& mh) : ptr_(mh.ptr_), moved_(true) {
         mh.ptr_ = 0;
     }
-    /*explicit*/ MemoryHandler(T* ptr = 0) : ptr_(ptr) {}
+    /*explicit*/ MemoryHandler(T* ptr = 0) : ptr_(ptr), moved_(false) {}
     T* ptr() { return ptr_; }
     ~MemoryHandler() { 
         delete ptr_; //it is fine to call 'delete 0'
@@ -28,14 +32,20 @@ public:
     }
     MemoryHandler& operator=(MemoryHandler& mh) {
         MemoryHandler(mh).Swap(*this);
+        moved_(true);
         return *this;
     }
 private:
     void Swap(MemoryHandler& mh) {
         std::swap(mh.ptr_, ptr_);
     } 
+    void MoveTo(MemoryHandler& other) {
+        other.ptr_ = ptr_;
+        ptr_ = 0;
+    }
 private:
     T* ptr_;
+    bool moved_;
 };
 
 //------------------------------------------------------------------------------
@@ -66,7 +76,7 @@ void Test() {
     mh4 = mh3;
     assert(mh3.ptr() == 0);
     assert(*mh4.ptr() == 3);
-    
+
     //The following is not supported and results in
     //compilation errors
     //const MemoryHandler<int> cmh(new int(66));
