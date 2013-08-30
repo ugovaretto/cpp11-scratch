@@ -3,6 +3,7 @@
 #include <vector>
 
 //------------------------------------------------------------------------------
+#if 0
 template <typename T>
 class MemoryHandler {
 private:
@@ -14,7 +15,7 @@ public:
     MemoryHandler(MemoryHandler& mh) : ptr_(mh.ptr_) {
         mh.ptr_ = 0;
     }
-    /*explicit*/ MemoryHandler(T* ptr = 0) : ptr_(ptr) {}
+    explicit MemoryHandler(T* ptr = 0) : ptr_(ptr) {}
     T* ptr() { return ptr_; }
     ~MemoryHandler() { 
         delete ptr_; //it is fine to call 'delete 0'
@@ -37,6 +38,41 @@ private:
 private:
     T* ptr_;
 };
+#else
+template <typename T>
+class MemoryHandler {
+private:
+    struct Proxy {
+        T* ptr;  
+    };
+public:
+    MemoryHandler(MemoryHandler&& mh) : ptr_(mh.ptr_) {
+        mh.ptr_ = 0;
+    }
+    MemoryHandler(MemoryHandler& mh) : ptr_(mh.ptr_) {
+        mh.ptr_ = 0;
+    }
+    explicit MemoryHandler(T* ptr = 0) : ptr_(ptr) {}
+    T* ptr() { return ptr_; }
+    ~MemoryHandler() { 
+        delete ptr_; //it is fine to call 'delete 0'
+    }
+    MemoryHandler& operator=(MemoryHandler&& mh) {
+        MemoryHandler(mh).Swap(*this);
+        return *this;
+    }
+    MemoryHandler& operator=(MemoryHandler& mh) {
+        MemoryHandler(mh).Swap(*this);
+        return *this;
+    }
+private:
+    void Swap(MemoryHandler& mh) {
+        std::swap(mh.ptr_, ptr_);
+    } 
+private:
+    T* ptr_;
+};
+#endif
 
 //------------------------------------------------------------------------------
 struct Printer {
@@ -75,11 +111,11 @@ void Test() {
     //Also trying to insert an object into an std::vector
     //is not supported due to the lack of a copy constructor accepting
     //a constant reference
-    //std::vector< MemoryHandler< int > > mhandlers1;
-    //mhandlers1.push_back(MemoryHandler< int >(new int(1)));
-    //std::vector< MemoryHandler< int > > mhandlers2(1);
-    //MemoryHandler< int > mh(new int(1));
-    //mhandlers2[0] = mh;
+    std::vector< MemoryHandler< int > > mhandlers1;
+    mhandlers1.emplace_back(std::move(MemoryHandler< int >(new int(4))));
+    std::vector< MemoryHandler< int > > mhandlers2(1);
+    MemoryHandler< int > mh(new int(1));
+    mhandlers2[0] = mh;
 }
 
 
