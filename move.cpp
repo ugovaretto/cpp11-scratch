@@ -205,11 +205,12 @@ void bar(const IH& ih) {
 
 class Movable {
 public:
-    Movable(int* p) : data_(p), moved_(false) {}
-    Movable(const Movable& m) : moved_(false) {
+    Movable(int* p) : data_(p), moved_(false) { dbg_instances++; }
+    Movable(const Movable& m) : data_(0), moved_(false) {
         m.move_to(this);
+        dbg_instances++;
     }
-    Movable() : data_(0), moved_(false) {}
+    Movable() : data_(0), moved_(false) { dbg_instances++; }
     ~Movable() {
         if(!moved_) {
             delete data_;
@@ -220,42 +221,56 @@ public:
         m.move_to(this);
         return *this;
     }
-    int* data() {
+    int& data() {
         if(moved_) throw std::logic_error("Already moved");
-        return data_;
+        return *data_;
     }
-    const int* data() const {
+    const int& data() const {
         if(moved_) throw std::logic_error("Already moved");
-        return data_;
+        return *data_;
     }
+    void update(int) {}
     bool moved() const { return moved_; }
 private:
     void move_to(Movable* other) const {
         if(other == this) return;
+        dbg_copies++;
         if(other == 0) throw std::runtime_error("NULL object");
         if(moved_) throw std::logic_error("Already moved");
         other->data_ = data_;
         moved_ = true;
     }
 private:
-    int* data_;
+    int* data_; 
     mutable bool moved_; 
 public:
-    static int dbg_destructors;    
+    static int dbg_destructors;
+    static int dbg_copies;
+    static int dbg_instances;     
 };
 int Movable::dbg_destructors = 0;
+int Movable::dbg_copies = 0;
+int Movable::dbg_instances = 0;
+
+Movable MovableFactory(int i) {
+    return Movable(new int(i));
+}
+
 
 //------------------------------------------------------------------------------
 int main(int, char**) {
-    try{
-       std::vector< Movable > movables;
-       Movable mv(new int(2));
-       Movable mv2;
-       mv2 = mv;
-       movables.push_back(mv2);
-       assert(*movables[0].data() == 2);
+    try {
+    Movable mvbl(MovableFactory(555));
+    std::vector< Movable > movables;
+    Movable mv(new int(2));
+    Movable mv2;
+    mv2 = mv;
+    movables.push_back(mv2);
+    assert(movables[0].data() == 2);
    }catch(const std::exception& e) {std::cout << e.what() << std::endl;}
-       std::cout << Movable::dbg_destructors << std::endl;
+       std::cout << "Resource destructions: " << Movable::dbg_destructors
+                 << " Copies: " << Movable::dbg_copies 
+                 << " Instances created: " << Movable::dbg_instances << std::endl;
 //     PointerHandler<int>::type pi(new int(2));
 //     assert(*pi.res() == 2);
 //     PointerHandler<int>::type pi2(move(pi));
