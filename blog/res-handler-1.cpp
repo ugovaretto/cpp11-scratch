@@ -3,7 +3,7 @@
 #include <vector>
 
 //------------------------------------------------------------------------------
-#if 0
+#if __cplusplus < 201103L
 template <typename T>
 class MemoryHandler {
 private:
@@ -49,9 +49,7 @@ public:
     MemoryHandler(MemoryHandler&& mh) : ptr_(mh.ptr_) {
         mh.ptr_ = 0;
     }
-    MemoryHandler(MemoryHandler& mh) : ptr_(mh.ptr_) {
-        mh.ptr_ = 0;
-    }
+    MemoryHandler(const MemoryHandler&) = delete;
     explicit MemoryHandler(T* ptr = 0) : ptr_(ptr) {}
     T* ptr() { return ptr_; }
     ~MemoryHandler() { 
@@ -62,9 +60,10 @@ public:
         return *this;
     }
     MemoryHandler& operator=(MemoryHandler& mh) {
-        MemoryHandler(mh).Swap(*this);
+        MemoryHandler(std::move(mh)).Swap(*this);
         return *this;
     }
+    MemoryHandler& operator=(const MemoryHandler& mh) = delete;
 private:
     void Swap(MemoryHandler& mh) {
         std::swap(mh.ptr_, ptr_);
@@ -93,7 +92,7 @@ MemoryHandler< int > MemHandlerFactory(int i) {
 void Test() {
     MemoryHandler< int > mh1(new int(1));
     assert(*mh1.ptr() == 1);
-    MemoryHandler< int > mh2(mh1);
+    MemoryHandler< int > mh2(std::move(mh1));
     assert(mh1.ptr() == 0);
     assert(*mh2.ptr() == 1);
     MemoryHandler< int > mh3(MemHandlerFactory(3));
@@ -110,12 +109,16 @@ void Test() {
 
     //Also trying to insert an object into an std::vector
     //is not supported due to the lack of a copy constructor accepting
-    //a constant reference
+    //a constant reference; it is supported in the C++11 version however.
+#if __cplusplus >= 201103L
     std::vector< MemoryHandler< int > > mhandlers1;
-    mhandlers1.emplace_back(std::move(MemoryHandler< int >(new int(4))));
+    mhandlers1.push_back(MemoryHandler< int >(new int(4)));
+    assert(*mhandlers1.back().ptr() == 4);
     std::vector< MemoryHandler< int > > mhandlers2(1);
     MemoryHandler< int > mh(new int(1));
     mhandlers2[0] = mh;
+    assert(*mhandlers2[0].ptr() == 1);
+#endif    
 }
 
 
