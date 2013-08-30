@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cassert>
 #include <vector>
+#include <stdexcept>
 
 
 //Resoure handler with resource-only wrapper used for move operations
@@ -202,8 +203,59 @@ void bar(const IH& ih) {
     std::cout << ih.res() << std::endl;
 }
 
+class Movable {
+public:
+    Movable(int* p) : data_(p), moved_(false) {}
+    Movable(const Movable& m) : moved_(false) {
+        m.move_to(this);
+    }
+    Movable() : data_(0), moved_(false) {}
+    ~Movable() {
+        if(!moved_) {
+            delete data_;
+            dbg_destructors++;
+        }
+    }
+    Movable& operator=(const Movable& m){
+        m.move_to(this);
+        return *this;
+    }
+    int* data() {
+        if(moved_) throw std::logic_error("Already moved");
+        return data_;
+    }
+    const int* data() const {
+        if(moved_) throw std::logic_error("Already moved");
+        return data_;
+    }
+    bool moved() const { return moved_; }
+private:
+    void move_to(Movable* other) const {
+        if(other == this) return;
+        if(other == 0) throw std::runtime_error("NULL object");
+        if(moved_) throw std::logic_error("Already moved");
+        other->data_ = data_;
+        moved_ = true;
+    }
+private:
+    int* data_;
+    mutable bool moved_; 
+public:
+    static int dbg_destructors;    
+};
+int Movable::dbg_destructors = 0;
+
 //------------------------------------------------------------------------------
 int main(int, char**) {
+    try{
+       std::vector< Movable > movables;
+       Movable mv(new int(2));
+       Movable mv2;
+       mv2 = mv;
+       movables.push_back(mv2);
+       assert(*movables[0].data() == 2);
+   }catch(const std::exception& e) {std::cout << e.what() << std::endl;}
+       std::cout << Movable::dbg_destructors << std::endl;
 //     PointerHandler<int>::type pi(new int(2));
 //     assert(*pi.res() == 2);
 //     PointerHandler<int>::type pi2(move(pi));
@@ -212,10 +264,10 @@ int main(int, char**) {
 //     IH pi3 = foo();
 //     pi3 = foo();
 //     bar(move(IH(new int(5))));
-     std::vector< IH > phandlers;
-//     phandlers.push_back(move(pi2));
-//     assert(*phandlers.back().res() == 2);
-    phandlers.push_back(move(IH(new int(123))));
+//      std::vector< IH > phandlers;
+// //     phandlers.push_back(move(pi2));
+// //     assert(*phandlers.back().res() == 2);
+//     phandlers.push_back(move(IH(new int(123))));
 //     assert(*phandlers.back().res() == 123);
 // #ifndef WRAP_RESOURCE
 //     assert(phandlers[0].moves() == 4);
