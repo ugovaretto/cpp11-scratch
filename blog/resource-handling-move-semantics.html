@@ -203,7 +203,6 @@ MemoryHandler< std::vector<int*> > handler(new std::vector< int* >);
 std::vector<int*>& handles = *handler.ptr();
 MemoryHandler<int> mhIn(CreateHandler(...));
 handles.push_back(mhIn.release()); 
-
 MemoryHandler<int> mhOut(handles.front());
 handles.front() == 0;
 ]]></script>
@@ -254,6 +253,7 @@ public:
         return *this;
     }
     MemoryHandler& operator=(MemoryHandler& mh) {
+        //cast to && to properly specify the constructor to invoke
         MemoryHandler(std::move(mh)).Swap(*this);
         return *this;
     }
@@ -283,9 +283,7 @@ public:
 private:
   int socket_;
 };
-
 MemoryHandler< Socket > sh(new Socket(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)));
-
 int aSocket = sh.ptr()->get();
 ]]></script>
 
@@ -326,6 +324,7 @@ public:
         return *this;
     }
     Handler& operator=(Handler& h) {
+        //cast to && to properly specify the constructor to invoke
         Handler(std::move(h)).Swap(*this);
         return *this;
     }
@@ -337,10 +336,13 @@ private:
 private:
     T res_;
 };
-]]></script> 
+]]></script>  
 
-
+Note that C++11 standard collections do support move semantics out of the box through r-value references it is therefore possible to <em>move</em> objects into collections through the <tt>std::move</tt> function.
  
+<h2>Code</h2>
+
+Sample code is available on GitHub <a href="https://github.com/ugovaretto/cpp11-scratch/blob/master/blog/res-handler-1.cpp">at this address</a>.
 
 
 
