@@ -70,19 +70,15 @@ class ResourceHandler :
     struct ResourceProxy {
         ResourceHandler* rh;
     };
+
 public:    
     typedef DisposePolicyT DisposePolicy;
     typedef ValidPolicyT ValidPolicy;
     typedef ResetPolicyT ResetPolicy;
 public:
-    ResourceHandler(T res) : res_(res), moves_(0) {}
-    // ResourceHandler(const ResourceProxy& crm) : 
-    //     res_(crm.rh->res_),
-    //     moves_(crm.rh->moves_ + 1) {
-    //     std::cout << this << " Creation from proxy" << std::endl;
-    //     ResourceProxy& rm = const_cast< ResourceProxy& >(crm);
-    //     rm.rh->res_ = ResetPolicy::Reset(rm.rh->res_);
-    // }
+    ResourceHandler(T res = T()) : res_(res), moves_(0) {
+        res_ = ResetPolicy::Reset(res_);
+    }
     ResourceHandler(ResourceProxy rm) : 
         res_(rm.rh->res_),
         moves_(rm.rh->moves_ + 1) {
@@ -138,8 +134,7 @@ private:
 #endif
 
 //------------------------------------------------------------------------------
-//Policy implementation for pointer and number types, static method are
-//required to make it
+//Policy implementation for pointer and number types
 
 struct PointerDispose {
     template < typename T >
@@ -207,6 +202,8 @@ class Movable {
 public:
     Movable(int* p) : data_(p), moved_(false) { dbg_instances++; }
     Movable(const Movable& m) : data_(0), moved_(false) {
+        //only support the case of temporary returned by functions
+        if(!m.moved()) throw std::logic_error("###");
         m.move_to(this);
         dbg_instances++;
     }
@@ -273,15 +270,16 @@ int main(int, char**) {
                  << " Instances created: " << Movable::dbg_instances << std::endl;
 //     PointerHandler<int>::type pi(new int(2));
 //     assert(*pi.res() == 2);
-//     PointerHandler<int>::type pi2(move(pi));
+//     PointerHandler<int>::type pi2((pi));
 //     assert(pi.res() == 0);
 //     assert(*pi2.res() == 2);
 //     IH pi3 = foo();
 //     pi3 = foo();
 //     bar(move(IH(new int(5))));
-//      std::vector< IH > phandlers;
+//     std::vector< IH > phandlers(2);
 // //     phandlers.push_back(move(pi2));
 // //     assert(*phandlers.back().res() == 2);
+//     phandlers[0] = pi2;
 //     phandlers.push_back(move(IH(new int(123))));
 //     assert(*phandlers.back().res() == 123);
 // #ifndef WRAP_RESOURCE
@@ -294,7 +292,7 @@ int main(int, char**) {
 //     // foo -> temporary: 1 move
 //     // temporary -> proxy
 //     // proxy -> pre-existing instance = operator: +1 move
-//#endif
+// #endif
     return 0;
 }
 
