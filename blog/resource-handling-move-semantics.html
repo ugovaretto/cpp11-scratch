@@ -230,20 +230,117 @@ problem since it will not cause any error upon destruction of the container.
 
 <h2>C++ 11</h2>
 
-If you can use a C++ 11 enough-conformant compiler such as g++ 4.8, clang, or the latest microsoft compiler, and probably the latest PGI as well you can avoid tricks and hacks and simply use r-value references to perform the move:
+If you can use a C++ 11 conformant-enough compiler such as g++ >= 4.8, clang llvm >= 3.2, or the microsoft vs >= 2012, and probably the latest PGI as well you can avoid tricks and hacks and simply use r-value references to perform the move, here is the same <tt>MemoryHandler</tt> class implemented with r-value references and calls to <tt>std::move</tt> when needed.
 
+<script class="brush: cpp; light: true" type="syntaxhighlighter"><![CDATA[
+template <typename T>
+class MemoryHandler {
+private:
+    struct Proxy {
+        T* ptr;  
+    };
+public:
+    MemoryHandler(MemoryHandler&& mh) : ptr_(mh.ptr_) {
+        mh.ptr_ = 0;
+    }
+    MemoryHandler(const MemoryHandler&) = delete;
+    explicit MemoryHandler(T* ptr = 0) : ptr_(ptr) {}
+    T* ptr() { return ptr_; }
+    ~MemoryHandler() { 
+        delete ptr_; //it is fine to call 'delete 0'
+    }
+    MemoryHandler& operator=(MemoryHandler&& mh) {
+        MemoryHandler(mh).Swap(*this);
+        return *this;
+    }
+    MemoryHandler& operator=(MemoryHandler& mh) {
+        MemoryHandler(std::move(mh)).Swap(*this);
+        return *this;
+    }
+    MemoryHandler& operator=(const MemoryHandler& mh) = delete;
+private:
+    void Swap(MemoryHandler& mh) {
+        std::swap(mh.ptr_, ptr_);
+    } 
+private:
+    T* ptr_;
+};
+]]></script>
 
+If you are however stuck with compilers like Open64, Cray or NVIDIA nvcc you will need to use the various tricks outlined in the previous sections for the foreseeable future.
 
-If you are however stuck with compilers like Open64 or NVIDIA nvcc you will need to use the above tricks for the foreseeable future.
+<h2>One more thing...</h2>
 
+Automatic resource management techniques are applied to a number of types other than memory pointer, in my case I use sockets (regular and zmq), OpenCL handlers, CUDA and OpenGL resources, it is however always possible to use versions of the <tt>MemoryHandler</tt> implemented in this article by simply wrapping the resources with a class.
 
+E.g.
+<script class="brush: cpp; light: true" type="syntaxhighlighter"><![CDATA[
+class Socket {
+public:
+  Socket(int s) : socket_(s) {}
+  int get() { return socket_; }
+  ~Socket() { close(socket_); }
+private:
+  int socket_;
+};
+
+MemoryHandler< Socket > sh(new Socket(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)));
+
+int aSocket = sh.ptr()->get();
+]]></script>
+
+If you want to avoid memory operation you can always define a generic <tt>Handler</tt>
+class using policy based design, you'll need policies for:
+<ul>
+  <li>validation</li>
+  <li>setting an empty/invalid value</li>
+  <li>releasing the resource</li>
+</ul>
+
+A reworked version of the <tt>MemoryHandler</tt> class is shown below (C++ 11 version
+only).
+
+<script class="brush: cpp; light: true" type="syntaxhighlighter"><![CDATA[
+template <typename T,
+          typename ValidationPolicy,
+          typename ResetPolicy,
+          typename ReleasePolicy>
+class Handler {
+public:
+    Handler(Handler&& h) : res_(h.res_) {
+        ReleasePolicy::Reset(h.res_);
+    }
+    Handler(const Handler&) = delete;
+    explicit Handler(T res = T()) : res_(res) {
+        ReleasePolicy::Reset(res_);
+    }
+    T& get() { return res_; }
+    const T& get() const { return res_; }
+    ~Handler() { 
+        if(ValidationPolicy::Valid(res_)) {
+            ReleasePolicy::Release(res_);
+        }
+    }
+    Handler& operator=(Handler&& h) {
+        Handler(h).Swap(*this);
+        return *this;
+    }
+    Handler& operator=(Handler& h) {
+        Handler(std::move(h)).Swap(*this);
+        return *this;
+    }
+    Handler& operator=(const Handler&) = delete;
+private:
+    void Swap(Handler& h) {
+        std::swap(h.res_, res_);
+    } 
+private:
+    T res_;
+};
+]]></script> 
 
 
  
-
-
- 
-
 
 
 
