@@ -1,4 +1,4 @@
-#incude <cassert>   //assert
+#include <cassert>   //assert
 #include <algorithm> //swap
 #include <vector>
 
@@ -11,12 +11,8 @@ private:
         T* ptr;  
     };
 public:
-    MemoryHandler(const MemoryHandler& mh) : ptr_(0), moved_(true) {
-        if(!mh.moved_) assert(false);
-        mh.MoveTo(*this);
-    }
-    MemoryHandler(const Proxy& p) : ptr_(p.ptr), moved_(true) {}
-    MemoryHandler(MemoryHandler& mh) : ptr_(mh.ptr_), moved_(true) {
+    MemoryHandler(const Proxy& p) : ptr_(p.ptr) {}
+    MemoryHandler(MemoryHandler& mh) : ptr_(mh.ptr_) {
         mh.ptr_ = 0;
     }
     explicit MemoryHandler(T* ptr = 0) : ptr_(ptr) {}
@@ -33,20 +29,14 @@ public:
     }
     MemoryHandler& operator=(MemoryHandler& mh) {
         MemoryHandler(mh).Swap(*this);
-        moved_(true);
         return *this;
     }
 private:
     void Swap(MemoryHandler& mh) {
         std::swap(mh.ptr_, ptr_);
     } 
-    void MoveTo(MemoryHandler& other) {
-        other.ptr_ = ptr_;
-        ptr_ = 0;
-    }
 private:
     T* ptr_;
-    bool moved_;
 };
 #else // C++ 11
 template <typename T>
@@ -124,7 +114,11 @@ MemoryHandler< int > MemHandlerFactory(int i) {
 void Test() {
     MemoryHandler< int > mh1(new int(1));
     assert(*mh1.ptr() == 1);
+#if __cplusplus >= 201103L    
     MemoryHandler< int > mh2(std::move(mh1));
+#else
+    MemoryHandler< int > mh2(mh1);
+#endif    
     assert(mh1.ptr() == 0);
     assert(*mh2.ptr() == 1);
     MemoryHandler< int > mh3(MemHandlerFactory(3));
@@ -133,7 +127,6 @@ void Test() {
     mh4 = mh3;
     assert(mh3.ptr() == 0);
     assert(*mh4.ptr() == 3);
-
     //The following is not supported and results in
     //compilation errors
     //const MemoryHandler<int> cmh(new int(66));
