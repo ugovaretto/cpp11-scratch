@@ -35,30 +35,30 @@ void Print(const Args&... xs) {
 //------------------------------------------------------------------------------
 //apply a functor at run-time to a specific argument in a variadic
 //argument list
-namespace detail {
+namespace detail { //hide private implementation
 template < typename F, typename A >
-void apply_helper(int id, const F& f, int level, const A& arg) {
+void ApplyHelper(int id, const F& f, int level, const A& arg) {
     if(level == id) f(arg);
     else throw std::range_error("index out of bound");
 }
 
 template < typename F, typename T, typename... Args >
-void apply_helper(int id, const F& f, int level,
+void ApplyHelper(int id, const F& f, int level,
                   const T& x, const Args&... xs) {
     if(level == id) f(x);
-    else apply_helper(id, f, level + 1, xs...);
+    else ApplyHelper(id, f, level + 1, xs...);
 }
 }
 
 template < typename F, typename... Args >
-void apply(int id, const F& f, const Args&... args) {
-    detail::apply_helper(id, f, 0, args...);
+void Apply(int id, const F& f, const Args&... args) {
+    detail::ApplyHelper(id, f, 0, args...);
 }
 
 //------------------------------------------------------------------------------
-//apply a functor at run-time to a specific argument in a variadic
-//argument list
+//apply a functor at run-time to a specific argument in a tuple
 
+namespace detail { //hide private implementation
 template < typename TupleT, size_t N > 
 struct ApplyToTuple {
     template < typename F >
@@ -82,13 +82,13 @@ struct ApplyToTuple< TupleT, 1 > {
         throw std::range_error("index out of bound");
     }
 };
-
-template < typename F, typename... Args >
-void apply_to_tuple(int id, const F& f, const std::tuple< Args... >& args) {
-    ApplyToTuple< decltype(args), sizeof...(Args) >::apply(id, f, 
-                                                 sizeof...(Args) - 1, args);
 }
 
+template < typename F, typename... Args >
+void Apply(int id, const F& f, const std::tuple< Args... >& args) {
+    detail::ApplyToTuple< decltype(args), sizeof...(Args) >::apply(id, f, 
+                                                 sizeof...(Args) - 1, args);
+}
 
 //------------------------------------------------------------------------------
 class PrintToStream {
@@ -103,7 +103,7 @@ private:
 };
 
 template < typename... Args >
-std::string format(const char* f, const Args&... params) {
+std::string Format(const char* f, const Args&... params) {
     std::ostringstream oss;
     while(*f) {
         if(*f == '$') {
@@ -111,7 +111,7 @@ std::string format(const char* f, const Args&... params) {
             if(std::isdigit(*f)) {
                 //positional values go from $1 to $9
                 const int pos = *f - 48 - 1; //0 in standard ASCII  
-                apply(pos, PrintToStream(oss), params...);
+                Apply(pos, PrintToStream(oss), params...);
             } else oss << "$" << *f;
             ++f; 
         } else oss << *f++;
@@ -120,17 +120,16 @@ std::string format(const char* f, const Args&... params) {
     return oss.str();
 }
 
-
 //------------------------------------------------------------------------------
 int main(int, char**) {
     Print("one", 2, 3.0);
     std::cout << std::endl;
     const std::string s = 
-         format("this is the $2nd paramenter and this is the $1.\n",
+         Format("this is the $2nd paramenter and this is the $1.\n",
                 "first", 2);
     std::cout << s;
     auto t = std::make_tuple(1., 2., 3, "4");
-    apply_to_tuple(2, PrintToStream(std::cout), t);
+    Apply(2, PrintToStream(std::cout), t);
     std::cout << std::endl;
     return 0;
 }
