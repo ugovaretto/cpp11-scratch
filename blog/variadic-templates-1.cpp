@@ -109,7 +109,7 @@ std::string format(const char* f, const Args&... params) {
         if(*f == '$') {
             ++f;
             if(std::isdigit(*f)) {
-                //positional values to from $1 to $9
+                //positional values go from $1 to $9
                 const int pos = *f - 48 - 1; //0 in standard ASCII  
                 apply(pos, PrintToStream(oss), params...);
             } else oss << "$" << *f;
