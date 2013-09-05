@@ -4,18 +4,19 @@
 
 #include <string>
 #include <cassert>
+#include <iostream>
 
 //------------------------------------------------------------------------------
 struct P1 {
-    void P1do() {}
+    void P1do() { std::cout << "P1::P1do" << std::endl; }
 };
 
 struct P2 {
-    void P2do() {}
+    void P2do() { std::cout << "P2::P2do" << std::endl; }
 };
 
 struct P3 {
-    void P3do() {}
+    void P3do() { std::cout << "P3::P3do" << std::endl; }
 };
 
 template < typename... Policies >
@@ -87,7 +88,6 @@ struct Derived : Bases... {
         Initialize< Bases... >::Init(*this, args...);
     }
 };
-
 
 //------------------------------------------------------------------------------
 int main(int, char**) {
