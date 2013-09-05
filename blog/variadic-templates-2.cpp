@@ -45,31 +45,38 @@ private:
 //------------------------------------------------------------------------------
 struct Base1 {
     int b1_;
+    Base1() : b1_(-1) {}
     Base1(const int& i) : b1_( i ) {}
+    void Set(const int& i) {  b1_ = i; }
 };
 struct Base2 {
     int b2_;
+    Base2() : b2_(-2) {}
     Base2(const int& i) : b2_( i ) {}
+    void Set(const int& i) { b2_ = i; }
 };
 struct Base3 {
     int b3_;
+    Base3() : b3_(-3) {}
     Base3(const int& i) : b3_( i ) {}
+    void Set(int i) { b3_ = i; }
 };
 
 template < typename Head, typename... Tail >
 struct Init {
-    template < typename T, typename... Args >
-    static void init(Head* p, const T& h, const Args&... t) {
-        new (p) Head(h);
+    template < typename Derived, typename T, typename... Args >
+    //pass pointer to derived as template instead of void*
+    static void init(Derived* p, const T& h, const Args&... t) {
+        p->Head::Set(h);
         Init< Tail... >::init(p, t...);
     }
 };
 
 template < typename T >
 struct Init< T > {
-    template < typename A >
-    static void init(T* p, const A& a) {
-        new (p) T(a);
+    template < typename Derived, typename A >
+    static void init(Derived* p, const A& a) {
+        p->T::Set(a);   
     }
 };
 
@@ -77,8 +84,9 @@ struct Init< T > {
 
 template < typename... Bases >
 struct Derived : Bases... {
+    Derived() {}
     template < typename... Args > 
-    Derived( const Args&... args ) {
+    void Initialize(const Args&... args ) {
         Init< Bases... >::init(this, args...);
     }   
 };
@@ -94,6 +102,8 @@ int main(int, char**) {
     p123.P2do();
     p123.P3do();
     Wrapped w(1, "2");
-    Derived< Base1, Base2, Base3 > d(1, 2, 3);
+    Derived< Base1, Base2, Base3 > d;
+    d.Initialize(1, 2, 3);
+    std::cout << d.b1_ << ' ' << d.b2_ << ' ' << d.b3_ << std::endl;
     return 0;
 }
