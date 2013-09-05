@@ -2,9 +2,8 @@
 #error "C++ 11 support required"
 #endif 
 
-#include <iostream>
 #include <string>
-#include <functional>
+#include <cassert>
 
 //------------------------------------------------------------------------------
 struct P1 {
@@ -25,19 +24,21 @@ class P123 : public Policies... {};
 //------------------------------------------------------------------------------
 class Wrapped {
 public:
-    Wrapped(int i1, const std::string& str) : i1_(i1), str_(str) {}
+    Wrapped(const int& i1, const std::string& str) : i1_(i1), str_(str) {}
 private:
     int i1_;
-    std::string str_;    
+    std::string str_;
+    friend class Wrapper;    
 }; 
 
-template < typename T >
 class Wrapper {
 public:
     template < typename... Params >
     Wrapper(const Params&... params) 
-        : wrapped_(new Wrapped(std::forward(params...))) {}
-    ~Wrapper() { delete wrapped_; }    
+        : wrapped_(new Wrapped(params...)) {}
+    ~Wrapper() { delete wrapped_; }
+    int GetInt() const { return wrapped_->i1_; }
+    const std::string& GetString() const { return wrapped_->str_; }    
 private:
     Wrapped* wrapped_;    
 };
@@ -63,32 +64,28 @@ struct Base3 {
 };
 
 template < typename Head, typename... Tail >
-struct Init {
+struct Initialize {
     template < typename Derived, typename T, typename... Args >
-    //pass pointer to derived as template instead of void*
-    static void init(Derived* p, const T& h, const Args&... t) {
-        p->Head::Set(h);
-        Init< Tail... >::init(p, t...);
+    static void Init(Derived& p, const T& h, const Args&... t) {
+        static_cast< Head& >(p) = Head(h);   
+        Initialize< Tail... >::Init(p, t...);
     }
 };
 
 template < typename T >
-struct Init< T > {
+struct Initialize< T > {
     template < typename Derived, typename A >
-    static void init(Derived* p, const A& a) {
-        p->T::Set(a);   
+    static void Init(Derived& p, const A& a) {
+        static_cast< T& >(p) = T(a);   
     }
 };
 
-
-
 template < typename... Bases >
 struct Derived : Bases... {
-    Derived() {}
     template < typename... Args > 
-    void Initialize(const Args&... args ) {
-        Init< Bases... >::init(this, args...);
-    }   
+    Derived(const Args&... args ) {
+        Initialize< Bases... >::Init(*this, args...);
+    }
 };
 
 
@@ -101,9 +98,12 @@ int main(int, char**) {
     p123.P1do();
     p123.P2do();
     p123.P3do();
-    Wrapped w(1, "2");
-    Derived< Base1, Base2, Base3 > d;
-    d.Initialize(1, 2, 3);
-    std::cout << d.b1_ << ' ' << d.b2_ << ' ' << d.b3_ << std::endl;
+    Wrapper w(1, "2");
+    assert(w.GetInt() == 1);
+    assert(w.GetString() == "2");
+    Derived< Base1, Base2, Base3 > d(1, 2, 3);
+    assert(d.b1_ == 1);
+    assert(d.b2_ == 2);
+    assert(d.b3_ == 3);
     return 0;
 }
