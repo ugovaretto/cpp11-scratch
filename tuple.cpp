@@ -41,14 +41,12 @@ struct Cons {
 template < int I, int N, typename ListT >
 struct GetTypeHelper {
     typedef typename GetTypeHelper< I, N + 1, typename ListT::Tail >::Type Type;
-    enum {t=false, n = N, i = I};
     
 };
 
 template < int I, typename ListT >
 struct GetTypeHelper< I, I, ListT > {
     typedef typename ListT::Head Type;
-    enum{t=true, i = I};
     
 };
 
@@ -106,7 +104,8 @@ class Tuple : TupleStorage< 0, T0 >,
 typedef TupleStorage< 0, T0 > S0;
 typedef TupleStorage< 1, T1 > S1;
 typedef TupleStorage< 2, T2 > S2;
-typedef TupleStorage< 3, T3 > S2;
+typedef TupleStorage< 3, T3 > S3
+;
 typedef 
 typename Cons< S0, 
     typename Cons< S1,
@@ -139,19 +138,15 @@ int main(int, char**) {
     typedef GetType< 0, List >::Type Type0;
     typedef GetType< 1, List >::Type Type1;
     typedef GetType< 2, List >::Type Type2;
-    
-    //Without the double parentheses in assert with clang llvm 3.2:
-    //../tuple.cpp:133:40: error: too many arguments provided to function-like
-    // macro invocation
-    //assert(typename TypeAssert< Type0, float >::Equal == 1);
-    //                                   ^
-    //../tuple.cpp:133:5: error: use of undeclared identifier 'assert'
+    //without double parentheses you get an error as if two arguments were
+    //passed instead of one: the expression is interpreted as A < B, ...
     assert((TypeAssert< Type0, float >::Equal == 1));
     assert((TypeAssert< Type1, int>::Equal == 1));
     assert((TypeAssert< Type2, char>::Equal == 1));
-    Tuple< int, float > t(1, 2.0f);
-    assert(t.get<0>() == 1);
-    assert(t.get<1>() == 2.0f);
+    Tuple< int, float, char > t(1, 2.0f, '3');
+    assert(t.get< 0 >() == 1);
+    assert(t.get< 1 >() == 2.0f);
+    assert(t.get< 2 >() == '3');
     return 0;
 }
 
