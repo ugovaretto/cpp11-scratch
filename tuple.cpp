@@ -51,14 +51,14 @@ struct Cons {
 };
 
 
-template < int I, int N, int D,  typename ListT >
+template < int I, int N, typename ListT >
 struct GetTypeHelper {
-    typedef typename GetTypeHelper< I, N - 1, N - 1 - I, ListT >::Type Type;
+    typedef typename GetTypeHelper< I, N - 1, ListT >::Type Type;
     
 };
 
-template < int I, int N, typename ListT >
-struct GetTypeHelper< I, N, 0, ListT > {
+template < int I, typename ListT >
+struct GetTypeHelper< I, I, ListT > {
     typedef typename ListT::Head Type;
     
 };
@@ -68,8 +68,7 @@ struct GetType {
     enum {idx = I,
           bound = Size<ListT>::size - 1};
     typedef typename GetTypeHelper< idx,
-                                    bound,  
-                                    bound - idx, 
+                                    bound, 
                                     ListT >::Type Type;    
 };
 
@@ -127,7 +126,7 @@ int main(int, char**) {
     GetType< 0, T >::Type t;
     std::cout << TypeAssert< int, float >::Equal << std::endl;
     std::cout << TypeAssert< int, int >::Equal << std::endl;
-    std::cout << TypeAssert< GetType< 0, T >::Type, int >::Equal << std::endl;
+    std::cout << TypeAssert< GetType< 1, T >::Type, int >::Equal << std::endl;
     //Tuple< int, float > t(1, 2.0f);
     //std::cout << t.get<0>() << ' ' << t.get<1>() << std::endl;
     return 0;
