@@ -11,19 +11,24 @@ struct List {
     typedef TailT Tail;
 };
 
-template < typename ListT >
+template < typename ListT > //return first type
 struct First {
     typedef typename ListT::Head Type;
 };
 
-template < typename ListT >
-struct Rest {
+template < typename ListT > //return remainder of the list = list - head
+struct Rem {
     typedef typename ListT::Tail Type;
+};
+
+template <>
+struct Rem< Nulltype > {
+    typedef Nulltype Type;
 };
 
 template < typename L >
 struct Size {
-    enum {size = 1 + Size< typename L::Tail >::size};
+    enum {size = 1 + Size< typename Rem< L >::Type >::size};
 };
 
 template <>
@@ -40,20 +45,17 @@ struct Cons {
 
 template < int I, int N, typename ListT >
 struct GetTypeHelper {
-    typedef typename GetTypeHelper< I, N + 1, typename ListT::Tail >::Type Type;
+    typedef typename GetTypeHelper< I, N + 1,  
+                                    typename Rem< ListT >::Type >::Type Type;
     
 };
 
 template < int I, typename ListT >
 struct GetTypeHelper< I, I, ListT > {
-    typedef typename ListT::Head Type;
+    typedef typename First
+    < ListT >::Type Type;
     
 };
-
-// template < int N, typename ListT >
-// struct GetTypeHelper< 0, N, ListT > {
-//     typedef typename ListT::Head Type;
-// };
 
 template < int I, typename ListT >
 struct GetType {
