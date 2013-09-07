@@ -1,14 +1,15 @@
 
 #include <cassert>
 #include <iostream>
-#include <functional>
+#include <functional> //move
+#include <algorithm>  //swap
 
 template < int Count, int Bound, typename HeadT, typename... TailT >
 class TupleStorage : public TupleStorage< Count + 1, Bound, TailT... > {
 public:
     typedef HeadT Type;
     typedef TupleStorage< Count + 1, Bound, TailT... > Base;
-    TupleStorage(TupleStorage&& ts) : v_(std::move(ts.v_)), Base(ts) {}
+    TupleStorage(TupleStorage&& ts) : v_(std::forward(ts.v_)), Base(ts) {}
     TupleStorage(const TupleStorage& ts) : v_(ts.v_), Base(ts) {}
     TupleStorage() : v_(HeadT()), 
                      Base() {}
@@ -18,38 +19,36 @@ public:
         : v_(v),  Base(params...) {}    
     const HeadT& Get() const { return v_; }
     HeadT& Get() { return v_; }
-    TupleStorage& operator=(TupleStorage&& ts) {
-        v_= std::move(ts.v_);
-        Base::operator=(ts);
-        return *this;
+    void Swap(TupleStorage& ts) {
+        std::swap(v_, ts.v_);
+        Base::Swap(ts);
     }
-    TupleStorage& operator=(const TupleStorage& ts) {
-        v_= ts.v_;
-        Base::operator=(ts);
-        return *this;
+    bool operator==(const TupleStorage& ts) const {
+        return ts.v_ == v_ && Base::operator==(ts);
     }
 private:
     HeadT v_;        
 };
 
+//this is the root of the inheritance tree, could support empty base class
+//optimization by deriving from T...if T is not a POD type; use
+//std::is_fundamental to check
 template < int Bound, typename T>
 class TupleStorage< Bound, Bound, T> {
 public:
     typedef T Type;
-    TupleStorage(TupleStorage&& ts) : v_(std::move(ts.v_)) {}
+    TupleStorage(TupleStorage&& ts) : v_(std::forward(ts.v_)) {}
     TupleStorage(const TupleStorage& ts) : v_(ts.v_) {}
     TupleStorage() : v_(T()) {}
     TupleStorage(const T& v) : v_(v) {}
     TupleStorage(T&& v) : v_(v) {}
     const T& Get() const { return v_; }
     T& Get() { return v_; }
-    TupleStorage& operator=(TupleStorage&& ts) {
-        v_ = std::move(ts.v_);
-        return *this;
+    void Swap(TupleStorage& ts) {
+        std::swap(v_, ts.v_);
     }
-    TupleStorage& operator=(const TupleStorage& ts) {
-        v_ = ts.v_;
-        return *this;
+    bool operator==(const TupleStorage& ts) const {
+        return ts.v_ == v_;
     }
 private:
     T v_;        
@@ -87,43 +86,20 @@ public:
         return Base::Get();
     }
     Tuple& operator=(const Tuple& t) {
-        //XXX: implement swap
-        if(this == &t) return *this; 
-        Base::operator=(t);
+        Tuple(t).Swap(*this);
         return *this;
     }
     Tuple& operator=(Tuple&& t) {
-        //XXX: implement swap
-        if(this == &t) return *this; 
-        Base::operator=(t);
+        Tuple(t).Swap(*this);
         return *this;
-    }    
+    }
+    void Swap(Tuple& t) {
+        Base::Swap(t);
+    }
+    bool operator==(const Tuple& t) const {
+        return Base::operator==(t);
+    }
 };
-
-//to do swap, move...
-
-//-----------------------------------------------------------------------------
-// template < int pos, int count, int Head, int... Tail > 
-// struct Get {
-//     enum {value = Get< pos, count + 1, Tail... >::value};
-// };
-
-// template < int p, int Head, int... Tail >
-// struct Get< p, p, Head, Tail... > {
-//     enum {value = Head};
-// };
-
-// template < int... I >
-// struct Ints {
-//     template < int p >
-//     int get() { return Get< p, 0, I... >::value; }
-// };
-
-// int main(int, char**) {
-//   Ints< 0, 1, 2 > i;
-//   std::cout << i.get<1>() << std::endl;   
-//   return 0;
-// }
 
 //------------------------------------------------------------------------------
 int main(int, char**) {
@@ -137,6 +113,7 @@ int main(int, char**) {
     assert(t2.Get< 1 >() == 2.0f);
     assert(t2.Get< 2 >() == '3');
     Tuple< int, float, char > t3(t2);
+    assert(t2 == t2);
     return 0;
 }
 
