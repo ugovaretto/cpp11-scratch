@@ -80,8 +80,8 @@ class TupleStorage {
 public:
     typedef T Type;
     TupleStorage(const T& v) : v_(v) {}
-    const T& get() const { return v_; }
-    T& get() { return v_; }
+    const T& Get() const { return v_; }
+    T& Get() { return v_; }
 private:
     T v_;        
 };
@@ -98,37 +98,43 @@ public:
 template < typename T0,
            typename T1 = Empty,
            typename T2 = Empty,
-           typename T3 = Empty > 
+           typename T3 = Empty,
+           typename T4 = Empty > 
 class Tuple : TupleStorage< 0, T0 >,
               TupleStorage< 1, T1 >,
               TupleStorage< 2, T2 >,
-              TupleStorage< 3, T3 > {
+              TupleStorage< 3, T3 >,
+              TupleStorage< 4, T4 > {
 typedef TupleStorage< 0, T0 > S0;
 typedef TupleStorage< 1, T1 > S1;
 typedef TupleStorage< 2, T2 > S2;
-typedef TupleStorage< 3, T3 > S3
-;
+typedef TupleStorage< 3, T3 > S3;
+typedef TupleStorage< 4, T4 > S4;
 typedef 
 typename Cons< S0, 
     typename Cons< S1,
         typename Cons< S2,
-            typename Cons< S3 >
+            typename Cons< S3, 
+                typename Cons < S4 >
 ::Type >
     ::Type >
         ::Type >
-            ::Type Types;
+            ::Type >
+                ::Type Types;
 public:
     Tuple(const T0& v0,
           const T1& v1 = T1(),
           const T2& v2 = T2(),
-          const T3& v3 = T3()) :
+          const T3& v3 = T3(),
+          const T4& v4 = T4()) :
         TupleStorage< 0, T0 >(v0),
         TupleStorage< 1, T1 >(v1),
         TupleStorage< 2, T2 >(v2),
-        TupleStorage< 3, T3 >(v3) {}
+        TupleStorage< 3, T3 >(v3),
+        TupleStorage< 4, T4 >(v4) {}
     template < int i >
-    typename GetType< i, Types >::Type::Type get() {
-        return GetType< i, Types >::Type::get();
+    typename GetType< i, Types >::Type::Type Get() {
+        return GetType< i, Types >::Type::Get();
     }    
 };
 
@@ -146,9 +152,9 @@ int main(int, char**) {
     assert((TypeAssert< Type1, int>::Equal == 1));
     assert((TypeAssert< Type2, char>::Equal == 1));
     Tuple< int, float, char > t(1, 2.0f, '3');
-    assert(t.get< 0 >() == 1);
-    assert(t.get< 1 >() == 2.0f);
-    assert(t.get< 2 >() == '3');
+    assert(t.Get< 0 >() == 1);
+    assert(t.Get< 1 >() == 2.0f);
+    assert(t.Get< 2 >() == '3');
     return 0;
 }
 
