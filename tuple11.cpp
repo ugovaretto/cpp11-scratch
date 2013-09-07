@@ -65,7 +65,7 @@ struct GetType< I, I, Bound, HeadT, TailT... > {
 };
 
 template < typename... Args > 
-class Tuple : public TupleStorage< 0, sizeof... (Args) - 1, Args... > {
+class Tuple : TupleStorage< 0, sizeof... (Args) - 1, Args... > {
 public:
     typedef Tuple< Args... > Type;
     typedef TupleStorage< 0, sizeof... (Args) - 1, Args... > Base;
