@@ -1,8 +1,16 @@
+//C++ 11 Tuple
 
 #include <cassert>
 #include <iostream>
 #include <functional> //move
 #include <algorithm>  //swap
+
+//------------------------------------------------------------------------------
+namespace detail {
+
+//NOTE: could support empty base class optimization by deriving from type
+//HeadT or T but only if T is not a native type; 
+//use std::is_fundamental to check
 
 template < int Count, int Bound, typename HeadT, typename... TailT >
 class TupleStorage : public TupleStorage< Count + 1, Bound, TailT... > {
@@ -30,9 +38,7 @@ private:
     HeadT v_;        
 };
 
-//this is the root of the inheritance tree, could support empty base class
-//optimization by deriving from T...if T is not a POD type; use
-//std::is_fundamental to check
+//this is the root of the inheritance tree
 template < int Bound, typename T>
 class TupleStorage< Bound, Bound, T> {
 public:
@@ -64,11 +70,14 @@ struct GetType< I, I, Bound, HeadT, TailT... > {
     typedef TupleStorage< I, Bound, HeadT, TailT... > Type;   
 };
 
+}
+
+//------------------------------------------------------------------------------
 template < typename... Args > 
-class Tuple : TupleStorage< 0, sizeof... (Args) - 1, Args... > {
+class Tuple : detail::TupleStorage< 0, sizeof... (Args) - 1, Args... > {
 public:
     typedef Tuple< Args... > Type;
-    typedef TupleStorage< 0, sizeof... (Args) - 1, Args... > Base;
+    typedef detail::TupleStorage< 0, sizeof... (Args) - 1, Args... > Base;
     Tuple(Type&& t)
         : Base(t) {}
     Tuple(const Type& t)
@@ -80,14 +89,15 @@ public:
     Tuple() 
         : Base() {}    
     template < int i >
-    typename GetType< i, 0, sizeof... (Args) - 1, Args... >::Type::Type Get() {
+    typename detail::GetType< i, 0, sizeof... (Args) - 1, Args... >
+                                                        ::Type::Type Get() {
         typedef typename 
-            GetType< i, 0, sizeof... (Args) - 1, Args... >::Type Base;
+            detail::GetType< i, 0, sizeof... (Args) - 1, Args... >::Type Base;
         return Base::Get();
     }
     Tuple& operator=(const Tuple& t) {
         Tuple(t).Swap(*this);
-        return *this;
+        return *this;       
     }
     Tuple& operator=(Tuple&& t) {
         Tuple(t).Swap(*this);
