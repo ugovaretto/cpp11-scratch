@@ -11,7 +11,7 @@ struct Get< p, p, Head, Tail... > {
 };
 
 template < int... I >
-struct Ints {
+ struct __attribute__((annotate("UGO"))) Ints {
     template < int p >
     int get() { return Get< p, 0, I... >::value; }
 };
