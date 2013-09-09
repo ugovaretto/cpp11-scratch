@@ -11,6 +11,6 @@ int main(int, char**) {
     int i = int();
     bar(i);
     bar(1);
-    bar(([](){return 1;})());
+    bar(([]{return 1;})());
     return 0;
 }
