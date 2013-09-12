@@ -14,7 +14,8 @@ void bar(const int&) {
 }
 int main(int, char**) {
     int i = int();
-    bar(i); // calls &
+    bar(i); // calls &; removing the int& overload results in a compilation
+            // error: use std::move to call the && overload
     bar(1); // calls && (would call const & if && overload not present)
     bar(([]{return 1;})()); // calls && (would call const & if &&
                             //   overload not present)
