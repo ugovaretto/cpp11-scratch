@@ -133,7 +133,7 @@ private:
 //------------------------------------------------------------------------------
 int sum(int start, int end, int step) {
     for(;start < end; start += step)
-        ;
+        ; //fixed "empty body" warning with clang
     return start;
 }
 
