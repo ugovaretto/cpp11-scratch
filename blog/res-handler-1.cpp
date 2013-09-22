@@ -1,5 +1,8 @@
 #include <cassert>   //assert
 #include <algorithm> //swap
+#if __cplusplus >= 201103L
+#include <utility> //move
+#endif
 #include <vector>
 
 //------------------------------------------------------------------------------

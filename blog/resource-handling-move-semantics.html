@@ -1,6 +1,6 @@
 When you need to automatically manage the run-time lifetime of resources you can
 either choose reference counting where multiple references to the same resource exist
-or transfer ownership at each copy (assignment) and only have a single reference to a resource at any given time.
+or transfer ownership at each copy and only have a single reference to a resource at any given time.
 <br/>
 The two approaches result in a completely different set of implementation challenges:
 <ul>
@@ -11,7 +11,7 @@ post)</li>
 resource reference in the source object</li>
 </ul>
 
-This post describes a possible implementation in both <em>C++98</em> and <em>C++11</em> for a resource handler with ownership transfer similar to <tt>auto_ptr</tt>/<tt>unique_ptr</tt> to be used for resources such as file descriptors/streams, sockets and threads. Note that ownership transfer is also useful
+This post describes a possible implementation in both <em>C++98</em> and <em>C++11</em> for a resource handler with ownership transfer similar to <tt>auto_ptr</tt>/<tt>unique_ptr</tt> to be used for resources such as file descriptors/streams, sockets and memory pointers. Note that ownership transfer is useful
 when transferring pointers to heap allocated memory to avoid reallocating memory and
 copying data in cases where the source buffer is destroyed anyway after the copy.
 
@@ -28,7 +28,7 @@ copying data in cases where the source buffer is destroyed anyway after the copy
     
 <h2>A minimal resource handler</h2>
 
-A minimal resource handling class shall accept a resource handle/reference in its
+A minimal resource handling class shall accept a resource identifier in its
 constructor and destroy it in the destructor.<br/>
 e.g.
 <pre class="light: true; brush: cpp">
@@ -55,10 +55,18 @@ void PrintCppStd() {
 </pre>
 
 The resource is destroyed by the <tt>Printer</tt> destructor when the instance goes
-out of scope, this means that there must be only a single instance of MemoryHandler
-pointing to the Printer instance, if multiple instances of MemoryHandler pointing to
-the same Printer instance exist they will all try to delete the same resource
-resulting in a run-time error. In order to enforce this we can add a copy constructor accepting a non-const reference which copies the pointer and resets the pointer in the source object:
+out of scope, this means that there must be only a single instance of <tt>MemoryHandler</tt>
+pointing to the <tt>Printer</tt> instance, if multiple instances of <tt>MemoryHandler</tt> pointing to the same <tt>Printer</tt> instance exist they will all try to delete the same
+ resource resulting in a run-time error when the destructors get invoked.<br/>
+<br/>
+In order to enforce the single ownership requirement we need to transfer the 
+<em>ownership</em>, i.e. the responsibility to manage the resource lifetime, from one 
+object to another upon construction and copy operations. 
+
+The object owning a valid resource handle is the one that shall dispose the resource
+when its destructor is invoked. 
+
+To implement ownership transfer we can start by adding a copy constructor and assignment operator accepting a non-constant reference to another reference handler which copies the pointer and resets the pointer in the source object:
 
 <pre class="brush: cpp; light: true">
 MemoryHandler(MemoryHandler&amp; mh) : ptr_(mh.ptr_) {
@@ -66,37 +74,22 @@ MemoryHandler(MemoryHandler&amp; mh) : ptr_(mh.ptr_) {
 }
 </pre>
 
-to prevent assigning an object to another object we can either implement proper
-operators (see further down) or simply declare the assignment operator as private.
+A copy constructor accepting a non-constant reference can however only be used to copy
+from non-temporary objects and will not work with objects returned from functions.
 
 <h2>Ownership transfer</h2>
 
-Ownership transfer is needed when resource handlers are returned by functions and the
-returned temporary object must be copied to another object.
-<br/>
-In order to allow ownership transfer we need to implement a <em>proper</em> copy
-constructor and assignment operator.<br/>
+In order to have ownership transfer work with temporary source objects we need to implement a <em>proper</em> copy constructor and assignment operator.<br/>
 <br/>
 Note that assignment and construction must not only copy the resource pointer but also 
 notify the source object that it has lost ownership of the resource and must not try
 to dispose it.<br/>
 <br/>
-One way to <em>notify</em> the source object of lost ownership is to <em>simply</em> reset its inner<tt>ptr_</tt> resource handler to an empty or invalid value, e.g. to 0
-in the case of a memory pointer.<br/>
+One way to <em>notify</em> the source object of lost ownership is to <em>simply</em> reset its inner <tt>ptr_</tt> resource handle to an empty or invalid value, i.e. to <tt>0</tt> or <tt>nullptr</tt> in the case of a memory pointer.<br/>
 <br/>
-Implementing a copy constructor is easy: just use a non-const reference instead of a const reference this will also prevent constant object to be moved. A copy constructor
-without a const reference can be used only with a pre-existing non-temporary instance
-of another object; temporary objects can only be passed to constant references,
-unfortunately the main reason for which we need ownership transfer is exactly to
-assign temporary objects returned from functions.<br/>
-<br/>
-One way to implement proper ownership transfer is to create a new wrapper/proxy type
-that wraps the resource handler and make two additions to the class:
-<ol>
-  <li>an operator that returns a instance of a resource wrapper type</li>
-  <li>a constructor that accepts an instance of the resource wrapper type returned by
-      the operator implemented in(1)</li>
-</ol>
+The copy constructor accepting a non-const reference is useful to prevent moving 
+constant resource handlers but we also need to have a constructor that allows to 
+construct an object from a temporary object.</br>
 
 <h2>Move semantics</h2>
 
@@ -109,26 +102,37 @@ performing allocate-copy-free operations it is much faster to simply copy the po
 into the new object and reset the pointer of the temporary source object to 0 so that
 memory is not released when the temporary object goes out of scope.<br/>
 <br/>
-A typical case where move semantics is <em>required</em> is storing resource handlers
-requiring single ownership (e.g. C++ 11 futures or sockets) into standard library
+A typical case where move semantics is <u><em>required</em></u> is storing resource handlers requiring single ownership (e.g. sockets or C++ 11 futures) into standard library
 containers. When adding an element to e.g. <tt>an std::vector</tt> the element has to
 have its internal handle moved to the object stored into the container.<br/>
+Note however that it might not be a good idea to store resource handlers into containers
+unless you are 100% sure that no additional hidden copies happen internally during the
+common container operations. It might indeed be a better idea to store the actual resource
+handles in the container and have the resource handler wrap a heap allocated container
+filled with handles.</br>
 <br/>
-Move semantics is in fact implemented in terms of ownership transfer as a copy and reset operation applied to resource handlers.
+Move semantics is in fact implemented in terms of ownership transfer as a copy and reset operation applied to resource handles.
 
 <h2>Adding move semantics</h2>
 
-The <tt>MemoryHandler</tt> implementation can currently only be used to perform
+The current <tt>MemoryHandler</tt> implementation can currently only be used to perform
 scope-based automatic resource management.<br/>
 <br/>
-One way of supporting assignment from temporary objects is to create a new type that
-wraps the inner resource handler and add a conversion operator and constructor
-accepting instances of this new type.<br/>
+To fully support move semantics we need:
+<ul>
+  <li>a move constructor to move data from temporary objects (e.g. returned from functions) into a newly constructed object</li>
+  <li>an assignment operator that can move resource handles from the r-value to the
+      l-value instance</li>
+</ul>
+
+One way of supporting construction and assignment from temporary objects is to create a new type that wraps the inner resource handle and add a conversion operator and
+move constructor accepting instances of this new type.<br/>
+<br/>
+The copy-through-proxy and reset technique is known as the Colvin and Gibbons trick. 
+
 <img src="http://ugo.typepad.com/cpp/2013/08/cg-trick.png" width="100%"/>
-<br/>
-An assignment operator is added as well.<br/>
-<br/>
-Proxy type implemented as an inner class, no need for visibility from the outside:
+
+The Proxy type is implemented as an inner class, no need for visibility from the outside:
 <pre class="brush: cpp; light: true">
 template &lt;typename T&gt; class MemoryHandler {
 private:
@@ -162,7 +166,7 @@ private: //helper swap method
 
 As it stands we have a class that:
 <ul>
-  <li>properly manages the lifetime of a memory handle</li>
+  <li>properly manages the lifetime of a memory buffer identified by a memory handle (pointer)</li>
   <li>supports construction and assignment from non-const and temporary objects</li>
   <li>prevents constant objects from being moved</li>
 </ul>
@@ -189,28 +193,29 @@ error: no matching constructor for initialization of 'MemoryHandler<int>'
 this is because there is no copy constructor available which accepts a constant reference.<br/>
 <br/>
 Alternative ways to implement move semantics without the Colvin and Gibbons trick do exist e.g. add a mutable guard data member that is set to false when the object looses ownership of the resource handle and avoid destroying the resource if the object does not own it.
-The problem with this approach is that it allows to move any const object preventing the implementation of e.g. the safe auto_ptr idiom.</br>
+The problem with this approach is that it allows to move any const object preventing the implementation of e.g. the safe <tt>auto_ptr</tt> idiom.
 
 <h2>Move semantics and standard containers</h2>
 
-In cases where all objects in the container must be destroyed together instead of storing resource handlers as elements in standard containers you can simply:
+In cases where all the objects in the container must be destroyed together at the same
+time: instead of storing resource handlers as elements in standard containers you can simply:
 <ul>
   <li>wrap a container instance with a resource handler</li>
   <li>store the actual resource handle (e.g. a memory pointer) inside the collection</li>
 </ul>
 
-handler's destructor will take care of iterating over the container and release every resource one by one.<br/>
+the handler's destructor will take care of iterating over the container and release every resource one by one.<br/>
 <br/>
 In cases where resource handlers can be inserted and removed into/from the container:
 use the approach described above and </br>
 <ul>
-  <li>wrap elements with resource handles when removed from the container</li>
+  <li>wrap elements with resource handlers when removed from the container</li>
   <li>extract resource handles from handlers when adding resources to the container</li>
 </ul>
 
 The only addition to the class required to make this strategy work is a <tt>release()</tt> method which resets the internal pointer to 0 and returns the previously stored pointer.<br/>
 <br/>
-The code to manage a set of handles within a container looks like:
+The code to manage a set of handles within a container then looks like:
 
 <pre class="brush: cpp; light: true">
 MemoryHandler&lt; std::vector&lt;int*&gt; &gt; handler(new std::vector&lt; int* &gt;);
@@ -218,7 +223,7 @@ std::vector&lt;int*&gt;&amp; handles = *handler.ptr();
 MemoryHandler&lt;int&gt; mhIn(CreateHandler(...));
 handles.push_back(mhIn.release()); 
 MemoryHandler&lt;int&gt; mhOut(handles.front());
-handles.front() == 0;
+assert(handles.front() == 0); //moved
 </pre>
 
 To perform the resource extraction and automatically reset the source handle in one call
@@ -229,6 +234,7 @@ template &lt; typename T &gt;
 T* release(T*&amp; rh) {
   T* ret = rh;
   rh = 0;
+  return ret;
 } 
 </pre>
 
@@ -308,17 +314,23 @@ private:
   int socket_;
 };
 ...
-MemoryHandler&lt; Socket &gt; sh(new Socket(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)));
+MemoryHandler&lt; Socket &gt; 
+  sh(new Socket(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)));
 int aSocket = sh.ptr()-&gt;get();
 </pre>
 
 If you want to avoid memory management operations you can always define a generic
 <tt>Handler</tt> class using policy based design, you'll need policies for:
 <ul>
-  <li>validation</li>
-  <li>setting an empty/invalid value</li>
-  <li>releasing the resource</li>
+  <li>validation: to detect if a resource can be safely disposed</li>
+  <li>setting an empty/invalid value: to signal the wapper object it has lost ownership of the resource and must not try to dispose it</li>
+  <li>releasing the resource: to dispose the resoure upon destruction of the resource handler instance</li>
 </ul>
+
+Note that you usually need an implementation of policy-based design or strategy
+pattern to properly dipose the resource through a release function provided by client
+code to the handler class; one example is the case of arrays: a <tt>delete []</tt>
+operator has to be invoked instead of <tt>delete</tt>. 
 
 A reworked version of the <tt>MemoryHandler</tt> class is shown below (C++ 11 version
 only).
