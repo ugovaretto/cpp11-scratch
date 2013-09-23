@@ -1,3 +1,8 @@
+//Author: Ugo Varetto
+//Implementation of task-based concurrency (similar to Java's Executor)
+//gcc >= 4.8 or clang llvm >= 3.2 with libc++ required
+//link with -lpthread if not you'll get a run-time error 
+
 #include <iostream>
 #include <condition_variable>
 #include <thread>
@@ -8,6 +13,7 @@
 #include <deque>
 #include <vector>
 #include <stdexcept>
+#include <algorithm>
 
 //------------------------------------------------------------------------------
 template < typename T >
