@@ -8,7 +8,7 @@ void Overfoo(int const &arg) { std::cout << "const L-value\n"; }
 void Overfoo(int&& arg) { std::cout << "R-value\n"; }
 //note: returning a const r-value reference is useful to forbid code to use
 //temporary values returned by functions:
-//foo(const T& ): accepts temporary instances of T returned by funcitons
+//foo(const T& ): accepts temporary instances of T returned by functions
 //as xvalues
 //foo(const T&&): returns an error whe passing a temporary object returned
 //by another function
