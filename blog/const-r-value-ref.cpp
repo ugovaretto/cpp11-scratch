@@ -1,19 +1,33 @@
 #include <functional>
+#include <utility>
 #include <iostream>
 //const T&& - a use case: when keeping references we do not want to accept
 //references to temporary objects
-//#ifdef CRVALREF
+
+template < typename T >
+struct Const {
+    enum {isconst = 0};
+};
+
+template < typename T >
+struct Const < const T > {
+    enum {isconst = 1};
+};
+
+
+#ifdef CRVALREF
 template < typename T >
 void bar(const T&&) {
     std::cout << "const && - !!!\n";
 };
-//#endif
-//#ifdef RVALREF
+#endif
+#ifdef RVALREF
 template < typename T >
 void bar(T&&) {
-    std::cout << "&& - !!!\n";
+    std::cout << "const: " << std::boolalpha
+              << bool(Const< T >::isconst) << " && - !!!\n";
 };
-//#endif
+#endif
 template < typename T >
 void bar(T&) {
     std::cout << "&\n";
@@ -23,32 +37,58 @@ void bar(const T&) {
     std::cout << "const &\n";
 }
 
-template < typename T >
-void f(const T&& i) {
-  bar(i);
-}
 
-template < typename T >
-const T foo(const T& v) {return v; }
+
+
 
 class C {
 public:
- C() : i(1) {}
+  C(int i = 1) : i_(i) {}
 private:
-int i;
+  int i_;
 };
 
+void Bar(const C&) { std::cout << "const &\n"; }
+//void Bar(const C&&) { std::cout << "const &&\n"; }
+void Bar(C&&) { std::cout << "&&\n"; }
+
+int f() { 
+    return 3;
+}
+
+const C cc() { 
+    C c(f());
+    return c; 
+}
+
+template < typename T >
+const T cfoo(T t) {
+    return t;
+}
+
+//template < typename T > void bar(const T&&) = delete;
+
 int main(int, char**) {
-    int i = int();
-    ++i = 2;
-    bar(i++); // calls &; removing the int& overload results in a compilation
-            // error: use std::move to call the && overload
-    bar(foo(C())); // calls && (would call const & if && overload not present)
-    bar(([]{return 1;})()); // calls && (would call const & if &&
-                            //   overload not present)
-    f(2);
-    bar(2);
-    const int&& r = 2;
-    bar(r);
+    //bar(cfoo(C()));
+    // bar(([] {
+    //     C c;
+    //     return c;
+    //     })());
+    // auto ref = std::cref(([] {
+    //     const C c; //using a POD type like int doesn't work in this case
+    //                //because the compiler subsitute the entire function
+    //                //call with the value itself which is then simply a temporary
+    //                //object which causes the && overload to be selected
+    //     return c;
+    //     })());     
+    // bar(([] {
+    //     const C c; //using a POD type like int doesn't work in this case
+    //                //because the compiler subsitute the entire function
+    //                //call with the value itself which is then simply a temporary
+    //                //object which causes the && overload to be selected
+    //     return c;
+    //     })());
+    Bar(cc()); 
+    bar(cc());
     return 0;
 }
