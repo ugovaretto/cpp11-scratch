@@ -1,8 +1,14 @@
-#include <functional>
-#include <utility>
+//Author: Ugo Varetto
+//Experiments with r-value references
+// -DRVALREF: adds the T&& (template) and C&& (non template) overloads
+// -DCRVALREF: adds the const T&& (template) and const C&& (non template)
+//  overloads
+// Bottom line: in the case of templated code the T type in the T&& signature
+// is substituted with 'const U'; in the case of non-templated 'const U' 
+// matches 'const U&&' or 'const U&' but *not* U&& 
+
+
 #include <iostream>
-//const T&& - a use case: when keeping references we do not want to accept
-//references to temporary objects
 
 template < typename T >
 struct Const {
@@ -14,18 +20,17 @@ struct Const < const T > {
     enum {isconst = 1};
 };
 
-
 #ifdef CRVALREF
 template < typename T >
 void bar(const T&&) {
-    std::cout << "const && - !!!\n";
+    std::cout << "const &&\n";
 };
 #endif
 #ifdef RVALREF
 template < typename T >
 void bar(T&&) {
-    std::cout << "const: " << std::boolalpha
-              << bool(Const< T >::isconst) << " && - !!!\n";
+    std::cout << "&& - " << "const: " << std::boolalpha
+              << bool(Const< T >::isconst) << std::endl;
 };
 #endif
 template < typename T >
@@ -38,9 +43,6 @@ void bar(const T&) {
 }
 
 
-
-
-
 class C {
 public:
   C(int i = 1) : i_(i) {}
@@ -49,8 +51,12 @@ private:
 };
 
 void Bar(const C&) { std::cout << "const &\n"; }
-//void Bar(const C&&) { std::cout << "const &&\n"; }
+#ifdef CRVALREF
+void Bar(const C&&) { std::cout << "const &&\n"; }
+#endif
+#ifdef RVALREF
 void Bar(C&&) { std::cout << "&&\n"; }
+#endif
 
 int f() { 
     return 3;
@@ -66,28 +72,36 @@ const T cfoo(T t) {
     return t;
 }
 
-//template < typename T > void bar(const T&&) = delete;
-
+//------------------------------------------------------------------------------
 int main(int, char**) {
-    //bar(cfoo(C()));
-    // bar(([] {
-    //     C c;
-    //     return c;
-    //     })());
-    // auto ref = std::cref(([] {
-    //     const C c; //using a POD type like int doesn't work in this case
-    //                //because the compiler subsitute the entire function
-    //                //call with the value itself which is then simply a temporary
-    //                //object which causes the && overload to be selected
-    //     return c;
-    //     })());     
-    // bar(([] {
-    //     const C c; //using a POD type like int doesn't work in this case
-    //                //because the compiler subsitute the entire function
-    //                //call with the value itself which is then simply a temporary
-    //                //object which causes the && overload to be selected
-    //     return c;
-    //     })());
+    
+    //I TEMPLATED
+    //-----------
+    //1. verify that a bar<T>(T&&) is called with T = U when passed the 
+    //   value returned from a function 
+    bar(([] {
+         C c;
+         return c;
+         })());
+    //2. verify that in case a bar<const T>(const T&&) function is present such
+    //   function is called instead of (T&&) in case a temporary const
+    //   instance is passed to bar.
+    //2.1 the deduced return value is non-const
+    bar(([] {
+         const C c; 
+         return c;
+         })());
+    //2.2 the return value is const as per declaration and will result in
+    //  - bar(T&&) being called with T = const C OR
+    //  - bar(const T&&) being called with T = const C in case the const&&
+    //    version is defined
+    bar(cfoo(C()));
+
+    //II NON-TEMPLATED
+    //----------------
+    //1. verify that if the const && overload is not present the const &
+    //   function is called; this differs from the templated case where
+    //   T && with T = const U is called instead
     Bar(cc()); 
     bar(cc());
     return 0;
