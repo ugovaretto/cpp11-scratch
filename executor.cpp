@@ -19,16 +19,26 @@
 #include <cstdlib> //EXIT_*
 
 //------------------------------------------------------------------------------
+//synchronized queue:
+// - acquire lock on insertion and notify after insertion
+// - on extraction: acquire lock then if queue empty wait for notify, extract
+//   element
 template < typename T >
 class SyncQueue {
 public:
     void Push(const T& e) {
+        //simple scoped lock: acquire mutex in constructor,
+        //release in destructor
         std::lock_guard< std::mutex > guard(mutex_);
         queue_.push_front(e);
-        cond_.notify_one();
+        cond_.notify_one(); //notify 
     }
     T Pop() {
+        //cannot use simple scoped lock here because lock passed to
+        //wait must be able to acquire and release the mutex 
         std::unique_lock< std::mutex > lock(mutex_);
+        //stop and wait for notification if condition is false;
+        //continue otherwise
         cond_.wait(lock, [this]{ return !queue_.empty();});
         T e = queue_.back();
         queue_.pop_back();
@@ -41,13 +51,15 @@ private:
 };
 
 //------------------------------------------------------------------------------
+//interface and base class for callable objects 
 struct ICaller {    
     virtual bool Empty() const = 0;    
     virtual void Invoke() = 0;    
     virtual ~ICaller() {}
 };
 
-
+//callable object stored in queue shared among threads: parameters are
+//bound at object construction time
 template < typename ResultType >
 class Caller : public ICaller {
 public:
@@ -72,7 +84,7 @@ private:
     bool empty_;
 }; 
 
-
+//specialization for void return type
 template <>
 class Caller<void> : public ICaller {
 public:
@@ -97,9 +109,12 @@ private:
     bool empty_;
 }; 
 
-bool Remove(ICaller* c) { return !c->Empty(); }
+//bool Remove(ICaller* c) { return !c->Empty(); }
 
 //------------------------------------------------------------------------------
+//task executor: asynchronously execute callable objects. Specify the max number
+//of threads to use at Executor construction time; threads are started in
+//the constructor and joined in the destructor
 class Executor {
     typedef SyncQueue< ICaller* > Queue;
     typedef std::vector< std::thread > Threads;
@@ -108,6 +123,10 @@ public:
         : nthreads_(numthreads) {
         StartThreads();    
     }
+    //deferred call to f with args parameters
+    //1. all the arguments are bound to a function object taking zero parameters
+    //   which is put into the shared queue
+    //2. std::future is returned
     template < typename F, typename... Args > 
     auto operator()(F f, Args... args) -> std::future< decltype(f(args...)) > {
         if(threads_.empty()) throw std::logic_error("No active threads");
@@ -117,29 +136,50 @@ public:
         queue_.Push(c);
         return ft;
     }
-    void Stop() { //blocking
+    //stop and join all threads; queue is cleared by default call with 
+    //false to avoid clearing queue
+    //to "stop" threads an empty  Caller instance per-thread is put into the
+    //queue; threads interpret an empty Caller as as stop signal and exit from
+    //the execution loop as soon as one is popped from the queue
+    //Note: this is the only safe way to terminate threads, other options like
+    //invoking explicit terminate functions where available are similar
+    //to killing a process with Ctrl-C, since however threads are not
+    //processes the resources allocated/acquired during the thread lifetime
+    //are not automatically released
+    void Stop(bool clearQueue = true) { //blocking
         for(int t = 0; t != threads_.size(); ++t) queue_.Push(new Caller<void>); 
         std::for_each(threads_.begin(), threads_.end(), [](std::thread& t)
                                                             {t.join();});
         threads_.clear();
+        queue_.clear();
     }
-    void Start(int numthreads) { //non-blocking
+    //start or re-start with numthreads threads, queue is cleared by default
+    //call with ..., false to avoid clearing queue
+    void Start(int numthreads, bool clearQueue = true) { //non-blocking
         if(numthreads < 1) {
             throw std::range_error("Number of threads < 1");
         }
-        Stop();
+        Stop(clearQueue);
         nthreads_ = numthreads;
         StartThreads();
     }
-    void Restart(int nthreads) { Stop(); Start(nthreads); }
+    //same as Start; in case the Executor is created with zero threads
+    //it makes sense to call start; if it's created with a number of threads
+    //greater than zero call Restart in client code
+    void Restart(int numthreads, bool clearQueue = true) {
+        Start(numthreads, clearQueue); 
+    }
+    //join all threads
     ~Executor() { Stop(); }
 private:
+    //start threads and put them into thread vector
     void StartThreads() {
         for(int t = 0; t != nthreads_; ++t) {
             threads_.push_back(std::move(std::thread( [this] {
                 while(true) {
                     ICaller* c = queue_.Pop();
-                    if(c->Empty()) {
+                    if(c->Empty()) { //interpret an empty Caller as a
+                                     //'terminate' message
                         break;
                     }
                     c->Invoke(); 
@@ -184,6 +224,8 @@ int main(int argc, char** argv) {
             return EXIT_FAILURE;
         }
         std::cout << "OK\n\n";
+            std::this_thread::sleep_for(
+                    std::chrono::seconds(30)); 
         //OK run tasks
         const int sleeptime_ms = argc > 1 ? atoi(argv[1]) : 0;
         const int numtasks = argc > 2 ? atoi(argv[2]) : 20;
