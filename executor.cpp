@@ -43,7 +43,10 @@ public:
         T e = queue_.back();
         queue_.pop_back();
         return e;
-    }  
+    }
+    friend class Executor; //to allow calls to Clear  
+private:
+    void Clear() { queue_.clear(); }    
 private:
     std::deque< T > queue_;
     std::mutex mutex_;
@@ -151,7 +154,7 @@ public:
         std::for_each(threads_.begin(), threads_.end(), [](std::thread& t)
                                                             {t.join();});
         threads_.clear();
-        queue_.clear();
+        queue_.Clear();
     }
     //start or re-start with numthreads threads, queue is cleared by default
     //call with ..., false to avoid clearing queue
