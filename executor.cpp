@@ -19,7 +19,7 @@
 #include <cstdlib> //EXIT_*
 
 //------------------------------------------------------------------------------
-//synchronized queue:
+//synchronized queue (could be an inner class inside Executor):
 // - acquire lock on insertion and notify after insertion
 // - on extraction: acquire lock then if queue empty wait for notify, extract
 //   element
