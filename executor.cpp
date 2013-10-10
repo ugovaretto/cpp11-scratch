@@ -1,7 +1,8 @@
 //Author: Ugo Varetto
 //Implementation of task-based concurrency (similar to Java's Executor)
 //gcc >= 4.8 or clang llvm >= 3.2 with libc++ required
-//specify -pthread if not you'll get a run-time error e.g.
+//
+//do specify -pthread when compiling if not you'll get a run-time error
 //g++ executor.cpp -std=c++11 -pthread 
 
 #include <iostream>
@@ -112,8 +113,6 @@ private:
     bool empty_;
 }; 
 
-//bool Remove(ICaller* c) { return !c->Empty(); }
-
 //------------------------------------------------------------------------------
 //task executor: asynchronously execute callable objects. Specify the max number
 //of threads to use at Executor construction time; threads are started in
@@ -192,9 +191,9 @@ private:
         }
     }        
 private:
-    int nthreads_;
-    Queue queue_;
-    Threads threads_;
+    int nthreads_; //number of OS threads requested
+    Queue queue_;  //command queue
+    Threads threads_; //std::thread array; size == nthreads_ 
 };
 
 //------------------------------------------------------------------------------
