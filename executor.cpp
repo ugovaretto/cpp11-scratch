@@ -67,8 +67,11 @@ struct ICaller {
 template < typename ResultType >
 class Caller : public ICaller {
 public:
-    template < typename U, typename... Args >    
-    Caller(U f, Args...args) : f_(std::bind(f, args...)), empty_(false) {}
+    template < typename F, typename... Args >    
+    Caller(F&& f, Args...args) : 
+        f_(std::bind(std::forward<F>(f),
+                     std::forward<Args>(args)...)),
+        empty_(false) {}
     Caller() : empty_(true) {}
     std::future< ResultType > GetFuture() {
         return p_.get_future();
@@ -92,8 +95,8 @@ private:
 template <>
 class Caller<void> : public ICaller {
 public:
-    template < typename U, typename... Args >    
-    Caller(U f, Args...args) : f_(std::bind(f, args...)), empty_(false) {}
+    template < typename F, typename... Args >    
+    Caller(F f, Args...args) : f_(std::bind(f, args...)), empty_(false) {}
     Caller() : empty_(true) {}
     std::future< void > GetFuture() {
         return p_.get_future();
@@ -130,10 +133,13 @@ public:
     //   which is put into the shared queue
     //2. std::future is returned
     template < typename F, typename... Args > 
-    auto operator()(F f, Args... args) -> std::future< decltype(f(args...)) > {
+    auto operator()(F&& f, Args... args)
+    -> std::future< typename std::result_of< F (Args...) >::type > {    
         if(threads_.empty()) throw std::logic_error("No active threads");
-        typedef decltype(f(args...)) ResultType;
-        Caller< ResultType >* c = new Caller< ResultType >(f, args...);
+        typedef typename std::result_of< F (Args...) >::type ResultType; 
+        Caller< ResultType >* c = 
+            new Caller< ResultType >(std::forward< F >(f),
+                                     std::forward< Args >(args)...);
         std::future< ResultType > ft = c->GetFuture();
         queue_.Push(c);
         return ft;
@@ -226,16 +232,16 @@ int main(int argc, char** argv) {
             return EXIT_FAILURE;
         }
         std::cout << "OK\n\n";
-            std::this_thread::sleep_for(
-                    std::chrono::seconds(30)); 
         //OK run tasks
         const int sleeptime_ms = argc > 1 ? atoi(argv[1]) : 0;
         const int numtasks = argc > 2 ? atoi(argv[2]) : 20;
         const int numthreads = argc > 3 ? atoi(argv[3]) : 4;
+        std::cout << "Running tasks...\n";
         std::cout << "Run-time configuration:\n"
                   << "  " << numtasks     << " tasks\n"
                   << "  " << numthreads   << " threads\n"
-                  << "  " << sleeptime_ms << " ms task sleep time\n\n";
+                  << "  " << sleeptime_ms << " ms task sleep time\n"
+                  << std::endl;
         std::mutex iomutex;
         std::map< std::thread::id, int > counter; 
         exec.Restart(numthreads);
