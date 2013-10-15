@@ -1,0 +1,38 @@
+Use conding conventions similar (not equal) to Adobe's:
+
+* constants: upper case with underscore: THIS_IS_A_CONSTANT
+    
+* functions: all lower case with underscore: this_is_a_function()
+
+* types (structs, classes): all lower case with underscores and _t suffix
+
+* pointer types (whether actual pointers or C++11 ptrs): _ptr_t
+
+* private data members: all lower case with underscores and _ suffix
+
+* public data members (structs with no methods only): same as regular variables
+
+* enum: enums are types and therefore the enum type name follows the same
+  convention as the the type names (_t)
+
+* enum values: same as functions ? aren't those constant ? should I use
+  capitals ?
+
+* indentation: 4 spaces
+
+* template parameters: CamelCase + 'T'
+
+* macros: same as constants
+
+* globals: _g
+
+* space: assignment, operators, template brackets
+
+* one parameter per line in function calls when calls doesn't fit in one line
+
+* 80 columns
+
+* fine names: same as function declaration
+
+* one declaration per line
+
