@@ -1,28 +1,37 @@
-#include <tuple>
 #include <iostream>
+#include <tuple>
+
+using std::tuple;
 using std::cout;
 using std::endl;
-using std::tuple;
+
 
 int f(int i1, int i2) { return i1 * i2; }
 
-template<int ...> struct seq {};
-template<int N, int ...S> struct gens : gens<N-1, N-1, S...> {};
-template<int ...S> struct gens<0, S...>{ typedef seq<S...> type; };
+template<int ...> struct integer_sequence {};
+//first int parameter is counter, second onwards are used to create the
+//specialized type
+template<int N, int ...Is> 
+struct make_integer_sequene : make_integer_sequene< N - 1, N - 1, Is... > {};
+template< int ...Is > 
+struct make_integer_sequene< 0, Is... > { 
+    typedef integer_sequence< Is... > type; 
+};
 
-template < int...S, typename F, typename... Args > 
-auto callfun(seq<S...>, F f, tuple< Args... > params )
+template < int...Is, typename F, typename... Args > 
+auto call_impl(integer_sequence< Is... >, F f, tuple< Args... > params )
     -> typename std::result_of< F (Args...) >::type {    
-    return f(std::get<S>(params)...);
+    return f(std::get< Is >(params)...);
 }
 
 template < typename F, typename...Args > 
 auto call(F f, tuple< Args... > params )
     -> typename std::result_of< F (Args...) >::type {    
-    return callfun(typename gens<sizeof...(Args)>::type(), f, params);
+    return call_impl(typename make_integer_sequene<sizeof...(Args)>::type(), 
+                     f, params);
 }
 
 int main(int, char**) {
-    cout << call(f, std::make_tuple(1, 2)) << endl;
+    cout << call(f, std::make_tuple(1, 10)) << endl;
     return 0;
 }
