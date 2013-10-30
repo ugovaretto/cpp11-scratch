@@ -164,5 +164,6 @@ int main(int, char**) {
     tuple_t< int&, double& > r(a, b);
     r.get< 1 >() = 4.0;
     std::cout << b << std::endl;
+    return 0;
 }
 
