@@ -102,40 +102,60 @@ void data_t_test() {
 
 
 //==============================================================================
-// struct action_t {
-//     template < typename F >
-//     action_t(const F& f) : action_(new action_impl_t<
-//                                         ret_type< F >::type, 
-//                                         arg_types< F >::types >(f)) {}
-     
+struct action_t {
+    template < typename F >
+    action_t(const F& f) : action_(new action_impl_t< F >(f)) {}
     
-//     template < typename RetT, typename... Args >
-//     struct action_impl_t {
-//         template < typename F >
-//         action_impl_t(const F& f) : f_(new call_impl_t< F) {}
-       
-//         RetT operator(Args...args) {
-//             return f_(args);
-//         }
-//     };
-// };
+    template < typename RetT, typename...Args >
+    RetT exec(Args...args) {
+        return action_->template exec< RetT >(args...);
+    }
+    
 
-
-struct F {
-    void operator()(int i) {}
+    struct i_action_t {
+        template < typename RetT, typename...Args >
+        RetT exec(Args...args) {
+            return static_cast< action_impl_t< std::function< RetT (Args...) > >& >(*this).template exec< RetT >(args...); 
+        }
+    }; 
+    
+    template < typename F >
+    struct action_impl_t : i_action_t {
+        action_impl_t(const F& f) : f_(f) {}
+        template < typename RetT, typename...Args >
+        RetT exec(Args...args) {
+            return f_(args...);
+        }
+        F f_;
+    };
+    std::unique_ptr< i_action_t > action_;
 };
 
-void foo(int i){}
 
-template<typename T>
-std::function<T> make_function(T *t) {
-  return { t };
-}
+// struct F {
+//     void operator()(int i) {}
+// };
+
+// void foo(int i){}
+
+// template<typename T>
+// std::function<T> make_function(T *t) {
+//   return { t };
+// }
+
+struct A {
+    operator int() { return Intwrapper(this); }
+    struct Intwrapper {
+        Intwrapper(A* a) {}
+        operator int() { return 2;}
+    };
+};
 //==============================================================================
 int main(int, char**) {
-    data_t_test();
-    auto f = make_function(F());
-    // action_t a = []{std::cout << "CIAO"; return 1;}
+
+    //auto f = make_function(F());
+    action_t a = []{std::cout << "CIAO"; return 1;};
+    a.exec<int>();
     // int b = a.do<int>();
     return 0;
 }
