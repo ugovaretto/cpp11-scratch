@@ -102,46 +102,72 @@ void data_t_test() {
 
 
 //==============================================================================
-struct action_t {
+class action_t {
+public:
     template < typename F >
-    action_t(const F& f) : action_(new action_impl_t< F >(f)) {}
-    
+    action_t(const F& f) : 
+        type_(&typeid(F)), action_(new action_impl_t< F >(f)) {}
+    template < typename F >
+    action_t(F&& f) : 
+        type_(&typeid(F)), action_(new action_impl_t< F >(f)) {}    
+    action_t(const action_t& a) : type_(a.type_), action_(a.action_->copy()) {}
+    action_t(action_t&&) = default;
+    action_t& operator=(action_t a) {
+        type_ = a.type_;
+        action_ = std::move(a.action_);
+        return *this;
+    }
     template < typename RetT, typename...Args >
     RetT exec(Args...args) {
+        check_type(std::function<RetT (Args...)>, type_);
         return action_->template exec< RetT >(args...);
     }
-    
-
+private:    
     struct i_action_t {
         template < typename RetT, typename...Args >
         RetT exec(Args...args) {
-            return static_cast< action_impl_t< std::function< RetT (Args...) > >& >(*this).template exec< RetT >(args...); 
+            return static_cast< action_impl_t< std::function< 
+                RetT (Args...) > >& >(*this).template exec< RetT >(args...); 
         }
+        virtual i_action_t* copy() const = 0; 
     }; 
     
     template < typename F >
-    struct action_impl_t : i_action_t {
+    struct action_impl_t final : i_action_t {
         action_impl_t(const F& f) : f_(f) {}
+        action_impl_t(F&& f) : f_(std::move(f)) {}
         template < typename RetT, typename...Args >
         RetT exec(Args...args) {
             return f_(args...);
         }
+        i_action_t* copy() const override {
+            return new action_impl_t(*this);
+        }
         F f_;
     };
+    type_t type_;
     std::unique_ptr< i_action_t > action_;
 };
 
+template < typename LambdaT >
+auto lambda(LambdaT l) -> decltype(l) {
+    return l;
+}
 
 // struct F {
 //     void operator()(int i) {}
 // };
 
 // void foo(int i){}
-
+int foo() { return 1;}
 // template<typename T>
 // std::function<T> make_function(T *t) {
 //   return { t };
 // }
+
+struct F {
+    int operator()() {return 1;}
+};
 
 struct A {
     operator int() { return Intwrapper(this); }
@@ -150,12 +176,37 @@ struct A {
         operator int() { return 2;}
     };
 };
+template<typename T> struct remove_class { };
+template<typename C, typename R, typename... A>
+struct remove_class<R(C::*)(A...)> { using type = R(A...); };
+template<typename C, typename R, typename... A>
+struct remove_class<R(C::*)(A...) const> { using type = R(A...); };
+template<typename C, typename R, typename... A>
+struct remove_class<R(C::*)(A...) volatile> { using type = R(A...); };
+template<typename C, typename R, typename... A>
+struct remove_class<R(C::*)(A...) const volatile> { using type = R(A...); };
+
+template<typename T>
+struct get_signature_impl { using type = typename remove_class<
+    decltype(&std::remove_reference<T>::type::operator())>::type; };
+template<typename R, typename... A>
+struct get_signature_impl<R(A...)> { using type = R(A...); };
+template<typename R, typename... A>
+struct get_signature_impl<R(&)(A...)> { using type = R(A...); };
+template<typename R, typename... A>
+struct get_signature_impl<R(*)(A...)> { using type = R(A...); };
+template<typename T> using get_signature = typename get_signature_impl<T>::type;
+
+template<typename F> using make_function_type = std::function<get_signature<F>>;
+template<typename F> make_function_type<F> make_function(F &&f) {
+    return make_function_type<F>(std::forward<F>(f)); }
 //==============================================================================
 int main(int, char**) {
 
     //auto f = make_function(F());
-    action_t a = []{std::cout << "CIAO"; return 1;};
-    a.exec<int>();
+    action_t a = make_function([]{return 1;});
+    std::cout << a.exec<int>();
+   
     // int b = a.do<int>();
     return 0;
 }
