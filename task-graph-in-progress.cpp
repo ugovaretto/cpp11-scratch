@@ -1,25 +1,92 @@
 #include <iostream>
 #include <memory> //unique_ptr etc.
+#include <cassert>
+#include <stdexcept>
+
+typedef const std::type_info* type_t;
+
+#if CHECK_TYPES
+#ifndef CUSTOM_TYPE_CHECKER
+template < typename T >
+void check_type(type_t t) {
+    if(&typeid(T) != t) {
+        throw(std::bad_cast("Invalid cast"));
+    }
+}
+#endif
+#else
+template < typename T >
+void check_type(type_t) {}
+#endif
+
+
+struct data_t {
+    struct i_data_t {
+        virtual i_data_t* copy() const = 0;
+        template < typename T >
+        const T& get() const {
+            return static_cast< const data_impl_t< T >& >(*this).get();
+        }
+    };
+    template < typename T >
+    struct data_impl_t : i_data_t {
+        i_data_t* copy() const {
+            return new(data_impl_t< T >(*this));
+        }
+        const T& get() const {
+            return data_;
+        }
+        T data_;
+    };    
+    template < typename T >
+    data_t(const T& d) : type_(&typeid(T)), data_(new data_impl_t< T >(d)) {}
+    data_t(const data_t& d) : data_(d.data_.copy()) {}
+    data_t(data_t&&) = default;
+    template< typename T >
+    const T& get<T>() const {
+        check_type< T >(type_);
+        return data_->get< T >();
+    }    
+    std::unique_ptr< i_data_t > data_;
+    type_t type_;
+};
+
+using const_data_array_t = 
+    std::vector< std::const_reference_wrapper< data_t > >;
 
 struct task_node_t {  
-    template < typename A >
-    task_node_t(const A& a) : action_(new A(a)) {}   
-    template < typename RetT, typename...Args >
-    RetT do(Ret& ret, Args...args) {
-        return action(args...);
-    }
-    struct i_action {
-        void 
-    };
-    const type_info*     
+    action_t a;
+    const_task_node_array_t in;
+    task_node_array_t out; 
+    data_t out;
+    binder_t call;
+    bool enabled;   
 };
+
+execute(task_node_t& tn) {
+    call(a, in, out);
+    for(auto& next; out)
+        if(next.enabled)
+            execute(next);
+}
+
+bind(binder_t ) {
+    call(a, in, out);
+    for(auto& next; out)
+        if(next.enabled)
+            execute(next);
+}
+
+connect(const task_node_t& in, task_node_t out, pos) {
+    out.in[pos] = std::cref(in);
+}
 
 template < typename T >
 task_node_t make_task_node(T t) {
     return task_node_t();
 }
 
-void execute(int nt, task_node_t& tn) {
+void execute() {
    execute(tn.action, )
 }
 

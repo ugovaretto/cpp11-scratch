@@ -4,6 +4,8 @@
 //
 //do specify -pthread when compiling if not you'll get a run-time error
 //g++ executor.cpp -std=c++11 -pthread 
+//
+// Run with -h for info on usage options
 
 #include <iostream>
 #include <condition_variable>
@@ -209,6 +211,9 @@ int sum(int start, int end, int step) {
     return start;
 }
 
+//entry point: launch tasks and print how many times each thread executes a task
+//check sample launch configurations and results past the end of the main
+//function
 int main(int argc, char** argv) {
     try {
         if(argc > 1 && std::string(argv[1]) == "-h") {
