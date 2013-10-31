@@ -63,11 +63,18 @@ struct task_node_t {
     bool enabled;   
 };
 
-execute(task_node_t& tn) {
-    call(a, in, out);
-    for(auto& next; out)
+struct b {
+    operator(action_t& a, array_data_in_t& ad, data_t& out) {
+        const tuple_t< int, float >& t = to_tuple_ref(ad);
+        
+    }
+};
+
+execute(task_node_t& tn, executor& e) {
+    future = e(call, a, tn.in, tn.out);
+    for(auto& next; tn.out)
         if(next.enabled)
-            execute(next);
+            execute(next, e);
 }
 
 bind(binder_t ) {
