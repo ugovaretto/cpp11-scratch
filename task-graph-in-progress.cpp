@@ -3,6 +3,12 @@
 #include <cassert>
 #include <stdexcept>
 
+IMPORTANT: HAVE GRAPH NODE HOLD REFERENCES TO :
+- INPUT DATA SOURCES
+- INPUT NODES
+- OUTPUT SOURCE
+- OUTPUT NODE
+
 typedef const std::type_info* type_t;
 
 #if CHECK_TYPES
