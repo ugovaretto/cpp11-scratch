@@ -203,17 +203,17 @@ struct make_integer_sequence< 0, Is... > {
     typedef integer_sequence< Is... > type; 
 };
 
-
+//todo ADD COPY(?)
 struct binder_t {
     typedef std::reference_wrapper< data_t > dataout_t;
     typedef std::vector< std::reference_wrapper< const data_t > > datain_t;
     typedef std::reference_wrapper< action_t > action_ref_t;
     template < typename RetT, typename...Args >
     binder_t(dataout_t out, datain_t in,
-             std::reference_wrapper< action_t > action, RetT , Args... ) {
+             std::reference_wrapper< action_t > action, RetT , Args... ) : 
         
-       caller_.reset(new caller_t< RetT, Args...>(out, in, action));
-   }
+       caller_(new caller_t< RetT, Args...>(std::move(out), in, std::move(action)))
+    {}
     
     void exec() {
         caller_->exec();
@@ -224,10 +224,14 @@ struct binder_t {
 
     template < typename RetT, typename...Args>
     struct caller_t : i_caller_t {
-        caller_t(dataout_t out, const datain_t& in, action_ref_t action) 
+        caller_t(dataout_t&& out, const datain_t& in, action_ref_t&& action) 
             : out_(out), in_(std::cref(in)), action_ref_(action) {}
         void exec() override {
-            out_.get().template get<RetT>() = action_ref_.get().template exec< RetT >(int(in_.get()[0].get().template get<int>()));   
+            exec_impl(typename make_integer_sequence< sizeof...(Args)>::type());
+        }
+        template < int...Is >
+        void exec_impl(integer_sequence<Is...>) {
+            out_.get().template get<RetT>() = action_ref_.get().template exec< RetT >(in_.get()[Is].get().template get<Args>()...);
         }
         dataout_t out_;
         std::reference_wrapper< const datain_t > in_;
@@ -237,19 +241,13 @@ struct binder_t {
     std::unique_ptr< i_caller_t > caller_;
 };
 
-struct S {
-    template < typename T >
-    S(T = T()) {}
-};
 //==============================================================================    
 int main(int, char**) {
-
     const data_t in = 2;
     data_t out = int();
-    action_t square = make_function([](int i){return 2 * i;});
+    action_t square = make_function([](int i, int){return 2 * i;});
     std::vector< std::reference_wrapper<  const data_t > > v = 
     {std::cref(in)};
-    S s((float()));
     binder_t binder(std::ref(out), v, std::ref(square), int(), int());
     binder.exec();
     std::cout << int(out) << std::endl;
