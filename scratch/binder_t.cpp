@@ -149,6 +149,8 @@ private:
     std::unique_ptr< i_action_t > action_;
 };
 
+//got the following code form stack overflow: find author and give credit
+//------------------------------------------------------------------------------
 template<typename T> struct remove_class { };
 template<typename C, typename R, typename... A>
 struct remove_class<R(C::*)(A...)> { using type = R(A...); };
@@ -173,7 +175,43 @@ template<typename T> using get_signature = typename get_signature_impl<T>::type;
 template<typename F> using make_function_type = std::function<get_signature<F>>;
 template<typename F> make_function_type<F> make_function(F &&f) {
     return make_function_type<F>(std::forward<F>(f)); }
+
 //==============================================================================
+//------------------------------------------------------------------------------
+template<int ...> struct integer_sequence {};
+//first int parameter is a counter, second onwards are used to create the
+//specialized type integer_sequence<0, 1, 2...> 
+//at each inheritance step the counter is decremented and the new counter
+//value is added to the integer sequence
+template<int N, int ...Is> 
+struct make_integer_sequence : make_integer_sequence< N - 1, N - 1, Is... > {};
+template< int ...Is > 
+struct make_integer_sequence< 0, Is... > { 
+    typedef integer_sequence< Is... > type; 
+};
+
+
+struct binder_t {
+    std::reference_wrapper< data_t > out;
+    typedef std::vector< std::reference_wrapper< const data_t > > datain_t;
+    template < typename RetT, typename...Args >
+    binder_t(std::reference_wrapper< data_t > out, const datain_t& in,
+             std::reference_wrapper< action_t > action) {
+        template < typename RetT, typename...Args >
+        create_caller(typename make_integer_sequene<sizeof...(Args)>::type(),
+                      in, out);
+        
+    }
+    template < int...Is, typename RetT, typename... Args >
+    void create_caller(integer_sequence<Is...>, out, in) {
+        caller_ = std::bind(&action_t::exec<RetT>, action_, in[Is]...);
+    }
+    void call() {
+        caller->call();
+    }
+
+};
+//==============================================================================    
 int main(int, char**) {
 
     //auto f = make_function(F());

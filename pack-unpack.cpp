@@ -20,9 +20,9 @@ template<int ...> struct integer_sequence {};
 //at each inheritance step the counter is decremented and the new counter
 //value is added to the integer sequence
 template<int N, int ...Is> 
-struct make_integer_sequene : make_integer_sequene< N - 1, N - 1, Is... > {};
+struct make_integer_sequence : make_integer_sequence< N - 1, N - 1, Is... > {};
 template< int ...Is > 
-struct make_integer_sequene< 0, Is... > { 
+struct make_integer_sequence< 0, Is... > { 
     typedef integer_sequence< Is... > type; 
 };
 
