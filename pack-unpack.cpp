@@ -31,7 +31,7 @@ struct make_integer_sequence< 0, Is... > {
 template < typename F, typename...Args > 
 auto call(F f, tuple< Args... > params )
     -> typename std::result_of< F (Args...) >::type {    
-    return call_impl(typename make_integer_sequene<sizeof...(Args)>::type(), 
+    return call_impl(typename make_integer_sequence<sizeof...(Args)>::type(), 
                      f, params);
 }
 

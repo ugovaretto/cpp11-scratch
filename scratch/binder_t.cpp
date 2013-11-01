@@ -3,6 +3,7 @@
 #include <memory> //unique_ptr etc.
 #include <cassert>
 #include <stdexcept>
+#include <vector>
 
 //==============================================================================
 typedef const std::type_info* type_t;
@@ -46,6 +47,11 @@ public:
         return data_->get< T >();
     }
     template< typename T >
+    T& get() {
+        check_type(T, type_);
+        return data_->get< T >();
+    }
+    template< typename T >
     void set(const T& d) {
         check_type(T, type_);
         data_->set(d);
@@ -59,6 +65,10 @@ private:
             return static_cast< const data_impl_t< T >& >(*this).get();
         }
         template < typename T >
+        T& get() {
+            return static_cast< data_impl_t< T >& >(*this).get();
+        }
+        template < typename T >
         void set(const T& d) {
             static_cast< data_impl_t< T >& >(*this).set(d);    
         }
@@ -70,6 +80,9 @@ private:
             return new data_impl_t< T >(*this);
         }
         const T& get() const {
+            return data_;
+        }
+        T& get() {
             return data_;
         }
         void set(const T& d) {
@@ -192,32 +205,64 @@ struct make_integer_sequence< 0, Is... > {
 
 
 struct binder_t {
-    std::reference_wrapper< data_t > out;
+    typedef std::reference_wrapper< data_t > dataout_t;
     typedef std::vector< std::reference_wrapper< const data_t > > datain_t;
+    typedef std::reference_wrapper< action_t > action_ref_t;
     template < typename RetT, typename...Args >
-    binder_t(std::reference_wrapper< data_t > out, const datain_t& in,
-             std::reference_wrapper< action_t > action) {
-        template < typename RetT, typename...Args >
-        create_caller(typename make_integer_sequene<sizeof...(Args)>::type(),
-                      in, out);
+    binder_t(dataout_t out, datain_t in,
+             std::reference_wrapper< action_t > action, RetT , Args... ) {
+        
+        create_caller< RetT, Args...>(typename make_integer_sequence<sizeof...(Args)>::type(),
+                       out, in, action);
         
     }
-    template < int...Is, typename RetT, typename... Args >
-    void create_caller(integer_sequence<Is...>, out, in) {
-        caller_ = std::bind(&action_t::exec<RetT>, action_, in[Is]...);
+    template <typename RetT, typename... Args, int...Is >
+    void create_caller(integer_sequence<Is...>, dataout_t out, const datain_t& in, action_ref_t action ) {
+        caller_.reset(make_caller(out.get().get< RetT >(), 
+            std::bind(&action_t::exec<RetT>, &(action.get()), in[Is].get()...)));
     }
-    void call() {
-        caller->call();
+    void exec() {
+        caller_->exec();
+    }
+    struct i_caller_t {
+        virtual void exec() = 0;
+    };
+
+    template < typename RetT, typename F >
+    struct caller_t : i_caller_t {
+        caller_t(RetT ret, F f) : ret_(std::ref(ret)), f_(f) {}
+        void exec() override {
+            f_();
+                        //ret_.get() = f_();
+        }
+        std::reference_wrapper< RetT > ret_;
+        F f_;
+    };
+    template < typename RetT, typename F >
+    caller_t< RetT, F >* make_caller(RetT& out, F f) {
+        return new caller_t< RetT, F >(out, f);
     }
 
+    std::unique_ptr< i_caller_t > caller_;
+};
+
+struct S {
+    template < typename T >
+    S(T = T()) {}
 };
 //==============================================================================    
 int main(int, char**) {
 
-    //auto f = make_function(F());
-    action_t a = make_function([]{return 1;});
-    std::cout << a.exec<int>();
-   
+    const data_t in = 2;
+    data_t out = int();
+    action_t square = make_function([](int i){return 2 * i;});
+    std::vector< std::reference_wrapper<  const data_t > > v;
+    v.push_back(std::cref(in));
+    S s((float()));
+    binder_t binder(std::ref(out), v, std::ref(square), int(), int());
+    binder.exec();
+    // std::cout << int(out) << std::endl;
+
     // int b = a.do<int>();
     return 0;
 }

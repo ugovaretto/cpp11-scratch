@@ -3,6 +3,8 @@
 #include <cassert>
 #include <stdexcept>
 
+db.insert(key1/)
+
 IMPORTANT: HAVE GRAPH NODE HOLD REFERENCES TO :
 - INPUT DATA SOURCES
 - INPUT NODES
