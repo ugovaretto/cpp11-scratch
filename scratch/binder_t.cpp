@@ -212,15 +212,9 @@ struct binder_t {
     binder_t(dataout_t out, datain_t in,
              std::reference_wrapper< action_t > action, RetT , Args... ) {
         
-        create_caller< RetT, Args...>(typename make_integer_sequence<sizeof...(Args)>::type(),
-                       out, in, action);
-        
-    }
-    template <typename RetT, typename... Args, int...Is >
-    void create_caller(integer_sequence<Is...>, dataout_t out, const datain_t& in, action_ref_t action ) {
-        caller_.reset(make_caller(out.get().get< RetT >(), 
-            std::bind(&action_t::exec<RetT>, &(action.get()), in[Is].get()...)));
-    }
+       caller_.reset(new caller_t< RetT, Args...>(out, in, action));
+   }
+    
     void exec() {
         caller_->exec();
     }
@@ -228,20 +222,17 @@ struct binder_t {
         virtual void exec() = 0;
     };
 
-    template < typename RetT, typename F >
+    template < typename RetT, typename...Args>
     struct caller_t : i_caller_t {
-        caller_t(RetT ret, F f) : ret_(std::ref(ret)), f_(f) {}
+        caller_t(dataout_t out, const datain_t& in, action_ref_t action) 
+            : out_(out), in_(std::cref(in)), action_ref_(action) {}
         void exec() override {
-            f_();
-                        //ret_.get() = f_();
+            out_.get().template get<RetT>() = action_ref_.get().template exec< RetT >(int(in_.get()[0].get().template get<int>()));   
         }
-        std::reference_wrapper< RetT > ret_;
-        F f_;
+        dataout_t out_;
+        std::reference_wrapper< const datain_t > in_;
+        action_ref_t action_ref_;
     };
-    template < typename RetT, typename F >
-    caller_t< RetT, F >* make_caller(RetT& out, F f) {
-        return new caller_t< RetT, F >(out, f);
-    }
 
     std::unique_ptr< i_caller_t > caller_;
 };
@@ -256,12 +247,12 @@ int main(int, char**) {
     const data_t in = 2;
     data_t out = int();
     action_t square = make_function([](int i){return 2 * i;});
-    std::vector< std::reference_wrapper<  const data_t > > v;
-    v.push_back(std::cref(in));
+    std::vector< std::reference_wrapper<  const data_t > > v = 
+    {std::cref(in)};
     S s((float()));
     binder_t binder(std::ref(out), v, std::ref(square), int(), int());
     binder.exec();
-    // std::cout << int(out) << std::endl;
+    std::cout << int(out) << std::endl;
 
     // int b = a.do<int>();
     return 0;
