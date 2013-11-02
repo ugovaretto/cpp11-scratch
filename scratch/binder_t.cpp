@@ -210,9 +210,11 @@ struct binder_t {
     typedef std::reference_wrapper< action_t > action_ref_t;
     template < typename RetT, typename...Args >
     binder_t(dataout_t out, datain_t in,
-             std::reference_wrapper< action_t > action, RetT , Args... ) : 
+             std::reference_wrapper< action_t > action, const RetT*,
+                                                        const Args*... ) : 
         
-       caller_(new caller_t< RetT, Args...>(std::move(out), in, std::move(action)))
+       caller_(new caller_t< RetT, Args...>(std::move(out), in, 
+               std::move(action)))
     {}
     
     void exec() {
@@ -231,7 +233,9 @@ struct binder_t {
         }
         template < int...Is >
         void exec_impl(integer_sequence<Is...>) {
-            out_.get().template get<RetT>() = action_ref_.get().template exec< RetT >(in_.get()[Is].get().template get<Args>()...);
+            out_.get().template get<RetT>() = 
+                action_ref_.get().template exec< RetT >
+                (in_.get()[Is].get().template get<Args>()...);
         }
         dataout_t out_;
         std::reference_wrapper< const datain_t > in_;
@@ -241,14 +245,20 @@ struct binder_t {
     std::unique_ptr< i_caller_t > caller_;
 };
 
+// template< typename RetT, typename...Args >
+// binder_t make_binder() {
+//     return binder(std::ref(out), v, std::ref(square), (int*) 0, (int*) 0, (int*) 0);    
+// }
+
 //==============================================================================    
 int main(int, char**) {
-    const data_t in = 2;
+    const data_t in1 = 2;
+    const data_t in2 = 5;
     data_t out = int();
-    action_t square = make_function([](int i, int){return 2 * i;});
+    action_t square = make_function([](int i, int j){return i * j;});
     std::vector< std::reference_wrapper<  const data_t > > v = 
-    {std::cref(in)};
-    binder_t binder(std::ref(out), v, std::ref(square), int(), int());
+    {std::cref(in1), std::cref(in2)};
+    binder_t binder(std::ref(out), v, std::ref(square), (int*) 0, (int*) 0, (int*) 0);
     binder.exec();
     std::cout << int(out) << std::endl;
 
