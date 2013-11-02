@@ -175,11 +175,7 @@ template<typename F> make_function_type<F> make_function(F &&f) {
     return make_function_type<F>(std::forward<F>(f)); }
 //==============================================================================
 int main(int, char**) {
-
-    //auto f = make_function(F());
-    action_t a = make_function([]{return 1;});
-    std::cout << a.exec<int>();
-   
-    // int b = a.do<int>();
+    action_t a = make_function([](int i){return 2 * i;});
+    assert(a.exec<int>(4) == 8);
     return 0;
 }

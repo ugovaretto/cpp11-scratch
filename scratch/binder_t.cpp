@@ -4,6 +4,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <vector>
+#include <type_traits> //remove_reference
 
 //==============================================================================
 typedef const std::type_info* type_t;
@@ -28,6 +29,7 @@ typedef const std::type_info* type_t;
 //==============================================================================
 class data_t {
 public:        
+    data_t() {}
     template < typename T >
     data_t(const T& d) : type_(&typeid(T)), data_(new data_impl_t< T >(d)) {}
     data_t(const data_t& d) : type_(d.type_), data_(d.data_->copy()) {}
@@ -36,6 +38,9 @@ public:
         type_ = d.type_;
         data_ = std::move(d.data_);
         return *this;
+    }
+    bool empty() const {
+        return !bool(data_);
     }
     template < typename T >
     operator T() const {
@@ -99,7 +104,9 @@ int f(int i) {
     return i;
 }
 
-void data_t_test() {
+void test_data() {
+    data_t empty;
+    assert(empty.empty());
     data_t d(2);
     assert(d.get< int >() == 2);
     assert(f(d) == 2);
@@ -107,10 +114,9 @@ void data_t_test() {
     assert(int(d) == 3);
     try {
         float f = float(d);
-        assert(false);
     } catch(...) {
-
-    } 
+        std::cout << "data_t OK\n" << std::endl;
+    }  
 }
 
 
@@ -162,7 +168,7 @@ private:
     std::unique_ptr< i_action_t > action_;
 };
 
-//got the following code form stack overflow: find author and give credit
+//got the following code form stack overflow: TODO: find author and give credit
 //------------------------------------------------------------------------------
 template<typename T> struct remove_class { };
 template<typename C, typename R, typename... A>
@@ -188,6 +194,12 @@ template<typename T> using get_signature = typename get_signature_impl<T>::type;
 template<typename F> using make_function_type = std::function<get_signature<F>>;
 template<typename F> make_function_type<F> make_function(F &&f) {
     return make_function_type<F>(std::forward<F>(f)); }
+//------------------------------------------------------------------------------
+void test_action() {
+    action_t a = make_function([](int i){return 2 * i;});
+    assert(a.exec<int>(4) == 8);
+    std::cout << "action_t OK\n" << std::endl;  
+}  
 
 //==============================================================================
 //------------------------------------------------------------------------------
@@ -203,20 +215,20 @@ struct make_integer_sequence< 0, Is... > {
     typedef integer_sequence< Is... > type; 
 };
 
-//todo ADD COPY(?)
 struct binder_t {
     typedef std::reference_wrapper< data_t > dataout_t;
     typedef std::vector< std::reference_wrapper< const data_t > > datain_t;
     typedef std::reference_wrapper< action_t > action_ref_t;
     template < typename RetT, typename...Args >
-    binder_t(dataout_t out, datain_t in,
+    binder_t(dataout_t out, const datain_t& in,
              std::reference_wrapper< action_t > action, const RetT*,
                                                         const Args*... ) : 
-        
+       
        caller_(new caller_t< RetT, Args...>(std::move(out), in, 
                std::move(action)))
     {}
-    
+    binder_t(const binder_t&) = default;
+    binder_t(binder_t&&) = default;
     void exec() {
         caller_->exec();
     }
@@ -245,23 +257,32 @@ struct binder_t {
     std::unique_ptr< i_caller_t > caller_;
 };
 
-// template< typename RetT, typename...Args >
-// binder_t make_binder() {
-//     return binder(std::ref(out), v, std::ref(square), (int*) 0, (int*) 0, (int*) 0);    
-// }
+template< typename RetT, typename...Args >
+binder_t make_binder(binder_t::dataout_t out, const binder_t::datain_t& in, 
+                     binder_t::action_ref_t action) {
+    return binder_t(out, in, action, 
+                    (typename std::remove_reference< RetT >::type*) nullptr, 
+                    (typename std::remove_reference< Args >::type*) nullptr...);
+} 
 
-//==============================================================================    
-int main(int, char**) {
+void test_binder() {
     const data_t in1 = 2;
     const data_t in2 = 5;
     data_t out = int();
     action_t square = make_function([](int i, int j){return i * j;});
-    std::vector< std::reference_wrapper<  const data_t > > v = 
-    {std::cref(in1), std::cref(in2)};
-    binder_t binder(std::ref(out), v, std::ref(square), (int*) 0, (int*) 0, (int*) 0);
+    std::vector< std::reference_wrapper< const data_t > > v = 
+        {std::cref(in1), std::cref(in2)};
+    binder_t binder((make_binder<int, int, int>(
+        std::ref(out), v, std::ref(square))));
     binder.exec();
-    std::cout << int(out) << std::endl;
+    assert(int(out) == 10);
+    std::cout << "binder_t OK\n" << std::endl;
+}
 
-    // int b = a.do<int>();
+//==============================================================================    
+int main(int, char**) {
+    test_data();
+    test_action();
+    test_binder();
     return 0;
 }
