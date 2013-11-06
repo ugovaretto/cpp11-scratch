@@ -1,3 +1,9 @@
+//Author: Ugo Varetto
+//variadic list -> std::vector<void*> holding pointers to
+//passed value references, works with temporary value references as well;
+//pointers to temporary references are of course invalid outside the scope
+//where the temporary is istantiated
+
 #include <vector>
 #include <cassert>
 #include <iostream>
@@ -12,7 +18,7 @@ void make_vector_impl(std::vector< void* >&) {}
 
 template < typename H, typename...Args > 
 void make_vector_impl(std::vector< void* >& v, H&& h, Args&&...args) {
-    v.push_back(&h);
+    v.push_back((void*)(&h));
     make_vector_impl(v, std::forward< Args >(args)...);            
 }
 
@@ -20,7 +26,7 @@ template < typename T, typename... Args >
 std::vector< void* > make_vector(T&& h, Args&&...args) {
     std::vector< void* > v;
     v.reserve(sizeof...(Args));
-    v.push_back(&h);
+    v.push_back((void*)(&h));
     make_vector_impl(v, std::forward< Args >(args)...);
     return v;
 }
@@ -64,7 +70,7 @@ int main(int, char**) {
     assert(&a == vp[0]);
     assert(&b == vp[1]);
     print(a, b);
-    print(2, 5);
+    print(2, 5, "hey");
     print();
     return 0;
 }
