@@ -109,6 +109,9 @@ std::tuple< H*, Args*... > to_tupleref(std::vector< void* >& v) {
     return t;
 }
 
+//==============================================================================
+//version 2: shorter and cleaner
+
 //------------------------------------------------------------------------------
 template < typename... Args >
 std::vector< void* > make_vector_2(Args&&...args) {
@@ -142,32 +145,88 @@ std::tuple< Args...> make_tuple(std::vector< void* >& v) {
 }
 
 template < typename...Args, int...I >
-std::tuple< Args*... > make_tuple_ref_helper(
+std::tuple< Args*... > make_tuple_ptr_helper(
     indexes_t< I... >,
     std::vector< void* >& v) {
     return std::tuple< Args*... >(reinterpret_cast< Args* >(v[I])...);
 }
 
 template < typename...Args >
-std::tuple< Args*...> make_tuple_ref(std::vector< void* >& v) {
-    return make_tuple_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
+std::tuple< Args*...> make_tuple_ptr(std::vector< void* >& v) {
+    return make_tuple_ptr_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
 }
 
+template < typename...Args, int...I >
+std::tuple< std::reference_wrapper< Args >... > make_tuple_ref_helper(
+    indexes_t< I... >,
+    std::vector< void* >& v) {
+    return std::tuple< std::reference_wrapper< Args >... >(*reinterpret_cast< Args* >(v[I])...);
+}
+
+template < typename...Args >
+std::tuple< std::reference_wrapper< Args >... > make_tuple_ref(std::vector< void* >& v) {
+    return make_tuple_ref_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
+}
+
+//------------------------------------------------------------------------------
+template < typename...Dummy >
+void dummy__(Dummy&&...) {}
+
+template< typename F, typename T >
+int call__(F&& f, T&& t) {
+    f(t);
+    return 0;
+}
+
+template < typename T, typename... F, int...I >
+void apply_to_tuple_helper(indexes_t< I...>, T&& t, F&&... f) {
+    using TT = typename std::remove_reference< T >::type;
+    dummy__(call__(std::forward< F >(f), 
+          std::forward< typename std::tuple_element< I, TT >::type >(std::get< I >(t)))...);
+}
+
+template< typename T, typename... F >
+void apply_to_tuple(T&& t, F&&... f) {
+    using TT = typename std::remove_reference< T >::type;
+    apply_to_tuple_helper(typename gen_indexes_t< std::tuple_size< TT >::value >::type(),
+                          std::forward< T >(t),
+                          std::forward< F >(f)...);
+}
+
+//in case the size of F... different from tuple size
+//error: pack expansion contains parameter packs 'f' and 'I' that have different lengths (1 vs. 3)
+//    dummy(f(std::get< I >(t))...);
+
+void foo(std::ostream& os, int i)    { os << i << ' ';}
+void foo(std::ostream& os, float f)  { os << f << ' ';}
+void foo(std::ostream& os, double d) { os << d << ' ';}
 
 //------------------------------------------------------------------------------
 int main(int, char**) {
+
     int a = 1;
     float b = 2.0f;
     double d = 1.0;
+    
     std::vector< void* > vp = make_vector_2(a, b, d);
+    assert(&a == vp[0]);
+    assert(&b == vp[1]);
+    assert(&d == vp[2]);
+    
     auto t2 = make_tuple< int, float, double >(vp);
     assert(std::get< 0 >(t2) == a);
     assert(std::get< 1 >(t2) == b);
     assert(std::get< 2 >(t2) == d);
-    assert(&a == vp[0]);
-    assert(&b == vp[1]);
-    assert(&d == vp[2]);
+
     std::ostringstream oss;
+    using namespace std::placeholders;
+    apply_to_tuple(t2,
+                   std::bind((void (*)(std::ostream&, int)) foo, std::ref(oss), _1),
+                   std::bind((void (*)(std::ostream&, float)) foo, std::ref(oss), _1),
+                   std::bind((void (*)(std::ostream&, double)) foo, std::ref(oss), _1));
+    assert(oss.str() == "1 2 1 ");
+    oss.str("");
+   
     print(oss, a, b);
     assert(oss.str() == "1 2 \n");
     oss.str("");
@@ -176,13 +235,20 @@ int main(int, char**) {
     oss.str("");
     print(oss);
     assert(oss.str() == "\n");
+   
     std::tuple< int, float, double > t = to_tuple< int, float, double >(vp);
     assert(std::get< 0 >(t) == a);
     assert(std::get< 1 >(t) == b);
     assert(std::get< 2 >(t) == d);
+   
     auto tref = to_tupleref< int, float, double >(vp);
     *std::get< 0 >(tref) = 10;
     assert(a == 10);
+
+    auto rw = make_tuple_ref< int, float, double >(vp); 
+    assert(std::get< 0 >(rw).get() == a);
+    std::get< 0 >(rw).get() = 12;
+    assert(a == 12);
 
     return 0;
 }
