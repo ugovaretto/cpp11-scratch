@@ -141,7 +141,8 @@ std::tuple< Args... > make_tuple_helper(
 
 template < typename...Args >
 std::tuple< Args...> make_tuple(std::vector< void* >& v) {
-    return make_tuple_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
+    return make_tuple_helper<Args...>(
+        typename gen_indexes_t< sizeof...(Args) >::type(), v);
 }
 
 template < typename...Args, int...I >
@@ -153,19 +154,23 @@ std::tuple< Args*... > make_tuple_ptr_helper(
 
 template < typename...Args >
 std::tuple< Args*...> make_tuple_ptr(std::vector< void* >& v) {
-    return make_tuple_ptr_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
+    return make_tuple_ptr_helper<Args...>(
+        typename gen_indexes_t< sizeof...(Args) >::type(), v);
 }
 
 template < typename...Args, int...I >
 std::tuple< std::reference_wrapper< Args >... > make_tuple_ref_helper(
     indexes_t< I... >,
     std::vector< void* >& v) {
-    return std::tuple< std::reference_wrapper< Args >... >(*reinterpret_cast< Args* >(v[I])...);
+    return std::tuple< std::reference_wrapper< Args >... >(
+        *reinterpret_cast< Args* >(v[I])...);
 }
 
 template < typename...Args >
-std::tuple< std::reference_wrapper< Args >... > make_tuple_ref(std::vector< void* >& v) {
-    return make_tuple_ref_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
+std::tuple< std::reference_wrapper< Args >... >
+make_tuple_ref(std::vector< void* >& v) {
+    return make_tuple_ref_helper<Args...>(
+        typename gen_indexes_t< sizeof...(Args) >::type(), v);
 }
 
 //------------------------------------------------------------------------------
@@ -182,21 +187,24 @@ template < typename T, typename... F, int...I >
 void apply_to_tuple_helper(indexes_t< I...>, T&& t, F&&... f) {
     using TT = typename std::remove_reference< T >::type;
     dummy__(call__(std::forward< F >(f), 
-          std::forward< typename std::tuple_element< I, TT >::type >(std::get< I >(t)))...);
+          std::forward< typename std::tuple_element< I, TT >::type >(
+                                                        std::get< I >(t)))...);
 }
 
 template< typename T, typename... F >
 void apply_to_tuple(T&& t, F&&... f) {
     using TT = typename std::remove_reference< T >::type;
-    apply_to_tuple_helper(typename gen_indexes_t< std::tuple_size< TT >::value >::type(),
-                          std::forward< T >(t),
-                          std::forward< F >(f)...);
+    apply_to_tuple_helper(
+        typename gen_indexes_t< std::tuple_size< TT >::value >::type(),
+        std::forward< T >(t),
+        std::forward< F >(f)...);
 }
 
 //in case the size of F... different from tuple size
-//error: pack expansion contains parameter packs 'f' and 'I' that have different lengths (1 vs. 3)
-//    dummy(f(std::get< I >(t))...);
+//error: pack expansion contains parameter packs 'f' and 'I' that have 
+//different lengths (1 vs. 3)
 
+//------------------------------------------------------------------------------
 void foo(std::ostream& os, int i)    { os << i << ' ';}
 void foo(std::ostream& os, float f)  { os << f << ' ';}
 void foo(std::ostream& os, double d) { os << d << ' ';}
@@ -219,11 +227,15 @@ int main(int, char**) {
     assert(std::get< 2 >(t2) == d);
 
     std::ostringstream oss;
+    
     using namespace std::placeholders;
+    using fooint_t    = void (*)(std::ostream&, int);
+    using foofloat_t  = void (*)(std::ostream&, float);
+    using foodouble_t = void (*)(std::ostream&, double);
     apply_to_tuple(t2,
-                   std::bind((void (*)(std::ostream&, int)) foo, std::ref(oss), _1),
-                   std::bind((void (*)(std::ostream&, float)) foo, std::ref(oss), _1),
-                   std::bind((void (*)(std::ostream&, double)) foo, std::ref(oss), _1));
+                   std::bind((fooint_t)    foo, std::ref(oss), _1),
+                   std::bind((foofloat_t)  foo, std::ref(oss), _1),
+                   std::bind((foodouble_t) foo, std::ref(oss), _1));
     assert(oss.str() == "1 2 1 ");
     oss.str("");
    
