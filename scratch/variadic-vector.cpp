@@ -110,11 +110,60 @@ std::tuple< H*, Args*... > to_tupleref(std::vector< void* >& v) {
 }
 
 //------------------------------------------------------------------------------
+template < typename... Args >
+std::vector< void* > make_vector_2(Args&&...args) {
+    void* v[] = 
+        {(void*)((typename std::remove_reference<Args>::type*)(&args))...};
+    return std::vector< void* >(v, v + sizeof...(Args));
+}
+
+//------------------------------------------------------------------------------
+template < int... >
+struct indexes_t {};
+
+template < int N, int...I >
+struct gen_indexes_t : gen_indexes_t< N - 1, N - 1, I... > {};
+
+template < int...I >
+struct gen_indexes_t< 0, I... > {
+    typedef indexes_t< I... > type;
+};
+
+template < typename...Args, int...I >
+std::tuple< Args... > make_tuple_helper(
+    indexes_t< I... >,
+    std::vector< void* >& v) {
+    return std::tuple< Args... >(*reinterpret_cast< Args* >(v[I])...);
+}
+
+template < typename...Args >
+std::tuple< Args...> make_tuple(std::vector< void* >& v) {
+    return make_tuple_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
+}
+
+template < typename...Args, int...I >
+std::tuple< Args*... > make_tuple_ref_helper(
+    indexes_t< I... >,
+    std::vector< void* >& v) {
+    return std::tuple< Args*... >(reinterpret_cast< Args* >(v[I])...);
+}
+
+template < typename...Args >
+std::tuple< Args*...> make_tuple_ref(std::vector< void* >& v) {
+    return make_tuple_helper<Args...>(typename gen_indexes_t< sizeof...(Args) >::type(), v);
+}
+
+
+//------------------------------------------------------------------------------
 int main(int, char**) {
     int a = 1;
     float b = 2.0f;
     double d = 1.0;
-    std::vector< void* > vp = make_vector(a, b, d);
+    std::vector< void* > vp = make_vector_2(a, b, d);
+    auto t2 = make_tuple< int, float, double >(vp);
+    assert(std::get< 0 >(t2) == a);
+    assert(std::get< 1 >(t2) == b);
+    assert(std::get< 2 >(t2) == d);
     assert(&a == vp[0]);
     assert(&b == vp[1]);
     assert(&d == vp[2]);
@@ -134,5 +183,6 @@ int main(int, char**) {
     auto tref = to_tupleref< int, float, double >(vp);
     *std::get< 0 >(tref) = 10;
     assert(a == 10);
+
     return 0;
 }
