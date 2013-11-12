@@ -128,6 +128,7 @@ public:
         : nthreads_(numthreads) {
         StartThreads();    
     }
+#ifdef USE_RESULT_OF    
     //deferred call to f with args parameters
     //1. all the arguments are bound to a function object taking zero parameters
     //   which is put into the shared queue
@@ -144,6 +145,20 @@ public:
         queue_.Push(c);
         return ft;
     }
+#else    
+    template < typename F, typename... Args > 
+    auto operator()(F&& f, Args... args)
+    -> std::future< decltype(f(args...)) > {    
+        if(threads_.empty()) throw std::logic_error("No active threads");
+        typedef decltype(f(args...)) ResultType; 
+        Caller< ResultType >* c = 
+            new Caller< ResultType >(std::forward< F >(f),
+                                     std::forward< Args >(args)...);
+        std::future< ResultType > ft = c->GetFuture();
+        queue_.Push(c);
+        return ft;
+    }
+#endif    
     //stop and join all threads; queue is cleared by default call with 
     //false to avoid clearing queue
     //to "stop" threads an empty  Caller instance per-thread is put into the
@@ -221,11 +236,11 @@ public:
         using R = typename std::result_of< F(T) >::type;
         auto p = std::make_shared< std::promise< R > >(std::promise< R >());
         auto ft = p->get_future();
-        queue_.Push([=]{
+        queue_.Push([=]() mutable {
             try {
-                //p->set_value(f(data_));
+                p->set_value(f(data_));
             } catch(...) {
-                //p->set_exception(std::current_exception());
+                p->set_exception(std::current_exception());
             }
         });
         return ft;
@@ -260,16 +275,17 @@ int main(int argc, char** argv) {
         std::string msg = "message - ";
         auto l = [sleeptime_ms](std::string& str, int i, Executor& e){
                     ConcurrentAccess< std::string& > s(str, e);
-                    s([i, &e](std::string& s) {
+                    s([i](std::string& s) {
                         s += " " + std::to_string(i);
+                        return 0;
                     });
-                    std::this_thread::sleep_for(
-                        std::chrono::milliseconds(sleeptime_ms));
+                    // std::this_thread::sleep_for(
+                    //     std::chrono::milliseconds(sleeptime_ms));
                     return 0;             
                 };
-        std::vector< std::future< void > > futures;        
+        std::vector< std::future< int > > futures;        
         for(int t = 0; t != numtasks; ++t) {
-            futures.push_back(exec(l, msg, t, exec));    
+            futures.push_back(exec(l, std::ref(msg), t, std::ref(exec)));    
         }        
         std::cout << "result string:\n" << msg << std::endl;       
         return 0;
