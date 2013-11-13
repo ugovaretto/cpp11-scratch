@@ -217,8 +217,8 @@ public:
     }
     template < typename F >
     auto operator()(F f) 
-    -> std::future< typename std::result_of< F(T) >::type > {
-        using R = typename std::result_of< F(T) >::type;
+    -> std::future< decltype(f(data_)) > {
+        using R = decltype(f(data_));
         auto p = std::make_shared< std::promise< R > >(std::promise< R >());
         auto ft = p->get_future();
         queue_.Push([=]{
@@ -258,18 +258,19 @@ int main(int argc, char** argv) {
                   << std::endl;
         Executor exec(numthreads);
         std::string msg = "message - ";
-        auto l = [sleeptime_ms](std::string& str, int i, Executor& e){
-                    ConcurrentAccess< std::string& > s(str, e);
-                    s([i, &e](std::string& s) {
+        std::function< int (std::string&, int) > l = [sleeptime_ms, &exec](std::string& str, int i) -> int{
+                    ConcurrentAccess< std::string& > s(str, exec);
+                    s([i, &exec](std::string& s) {
                         s += " " + std::to_string(i);
                     });
                     std::this_thread::sleep_for(
                         std::chrono::milliseconds(sleeptime_ms));
                     return 0;             
                 };
+        exec(l);        
         std::vector< std::future< void > > futures;        
         for(int t = 0; t != numtasks; ++t) {
-            futures.push_back(exec(l, msg, t, exec));    
+            futures.push_back(exec(l, msg, t));    
         }        
         std::cout << "result string:\n" << msg << std::endl;       
         return 0;
