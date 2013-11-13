@@ -218,6 +218,20 @@ private:
 };
 
 //------------------------------------------------------------------------------
+struct VoidType {};
+struct NonVoidType{};
+
+template < typename T >
+struct Void {
+    typedef NonVoidType type;
+};
+
+template <>
+struct Void< void > {
+    typedef VoidType type;
+};
+
+
 template < typename T >
 class ConcurrentAccess {
     T data_; //warning 'mutable' cannot be applied to references
@@ -231,30 +245,51 @@ public:
              }))
     {}
     template < typename F >
-<<<<<<< HEAD
-    auto operator()(F f) 
-    -> std::future< decltype(f(data_)) > {
-        using R = decltype(f(data_));
+    auto operator()(F&& f) 
+    -> std::future< typename std::result_of< F(T) >::type > {
+        using R = typename std::result_of< F(T) >::type;
+        return Invoke(std::forward< F >(f), typename Void< R >::type());
+    }
+
+    template < typename F >
+    auto Invoke(F&& f, const NonVoidType& )
+    -> std::future< typename std::result_of< F(T) >::type > {
+        using R = typename std::result_of< F(T) >::type;
         auto p = std::make_shared< std::promise< R > >(std::promise< R >());
         auto ft = p->get_future();
-        queue_.Push([=]{
-            try {
-                //p->set_value(f(data_));
-            } catch(...) {
-                //p->set_exception(std::current_exception());
-            }
-=======
-    void operator()(F f) {
         queue_.Push([=]() {
-            f(data_);
->>>>>>> a6d87a289d8f9813aa937d3dfccfc675ea22cd53
+            try {
+                 p->set_value(f(data_));
+             } catch(...) {
+                 p->set_exception(std::current_exception());
+             }
         });
+        return ft;
     }
+    
+    template < typename F >
+    std::future< void > Invoke(F&& f, const VoidType& ) {
+        auto p = 
+            std::make_shared< std::promise< void > >(std::promise< void >());
+        auto ft = p->get_future();
+        queue_.Push([=]() {
+            try {
+                 f(data_);
+                 p->set_value();
+             } catch(...) {
+                 p->set_exception(std::current_exception());
+             }
+        });
+        return ft;
+    } 
+    
     ~ConcurrentAccess() {
         queue_.Push([=]{done_ = true;});
         f_.wait();
     }
 };
+
+
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
@@ -278,24 +313,6 @@ int main(int argc, char** argv) {
                   << std::endl;
         using namespace std;
         Executor exec(numthreads);
-<<<<<<< HEAD
-        std::string msg = "message - ";
-        std::function< int (std::string&, int) > l = [sleeptime_ms, &exec](std::string& str, int i) -> int{
-                    ConcurrentAccess< std::string& > s(str, exec);
-                    s([i, &exec](std::string& s) {
-                        s += " " + std::to_string(i);
-                    });
-                    std::this_thread::sleep_for(
-                        std::chrono::milliseconds(sleeptime_ms));
-                    return 0;             
-                };
-        exec(l);        
-        std::vector< std::future< void > > futures;        
-        for(int t = 0; t != numtasks; ++t) {
-            futures.push_back(exec(l, msg, t));    
-        }        
-        std::cout << "result string:\n" << msg << std::endl;       
-=======
         Executor exec_aux(1);
         string msg = "start\n";
         //if single threaded use
@@ -308,15 +325,16 @@ int main(int argc, char** argv) {
                 s([=](string& s){
                     s += to_string(i) + " " + to_string(i);
                     s += "\n";
+                    return 0;
                 });
                 s([](string& s){
                     cout << s;
+                    return 0;
                 });
             }));
         for(auto& f: v) f.wait();
         std::cout << "Done\n";
             
->>>>>>> a6d87a289d8f9813aa937d3dfccfc675ea22cd53
         return 0;
     } catch(const std::exception& e) {
         std::cerr << e.what() << std::endl;
@@ -332,23 +350,3 @@ int main(int argc, char** argv) {
 //   20 tasks
 //   4 threads
 //   0 ms task sleep time
-// Running tasks...
-// Run-time configuration:
-//   4 tasks
-//   2 threads
-//   0 ms task sleep time
-// start
-// 0 0
-// start
-// 0 0
-// 1 1
-// start
-// 0 0
-// 1 1
-// 2 2
-// start
-// 0 0
-// 1 1
-// 2 2
-// 3 3
-// Done
