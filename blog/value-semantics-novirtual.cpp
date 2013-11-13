@@ -151,33 +151,46 @@ struct wrapper_t {
     struct base_t {
         template < typename T >
         base_t(const T& t) {
-            GetX = [this]() {
-                return static_cast< const model_t< T >& >(*this).d.GetX();            
+            const T* p = &static_cast< const model_t< T >* >(this)->d;
+            T* pp = &static_cast< model_t< T >* >(this)->d;
+            GetX = [p]() {
+                //return static_cast< const model_t< T >& >(*this).d.GetX();
+                return p->GetX();            
             };
-            GetY = [this]() {
-                return static_cast< const model_t< T >& >(*this).d.GetY();            
+            GetY = [p]() {
+                //return static_cast< const model_t< T >& >(*this).d.GetY(); 
+                return p->GetY();            
             };
-            GetZ = [this]() {
-                return static_cast< const model_t< T >& >(*this).d.GetZ();            
+            GetZ = [p]() {
+                //return static_cast< const model_t< T >& >(*this).d.GetZ(); 
+                return p->GetZ();            
             };
-            GetW = [this]() {
-                return static_cast< const model_t< T >& >(*this).d.GetW();            
+            GetW = [p]() {
+                //return static_cast< const model_t< T >& >(*this).d.GetW(); 
+                return p->GetW();            
             };
-            SetX = [this](float x_) {
-                return static_cast< model_t< T >& >(*this).d.SetX(x_);            
+            SetX = [pp](float x_) {
+                //return static_cast< model_t< T >& >(*this).d.SetX(x_);   
+                return pp->SetX(x_);         
             };
-            SetY = [this](float y_) {
-                return static_cast< model_t< T >& >(*this).d.SetY(y_);            
+            SetY = [pp](float y_) {
+                //return static_cast< model_t< T >& >(*this).d.SetY(y_);   
+                return pp->SetY(y_);           
             };
-            SetZ = [this](float z_) {
-                return static_cast< model_t< T >& >(*this).d.SetZ(z_);            
+            SetZ = [pp](float z_) {
+                //return static_cast< model_t< T >& >(*this).d.SetZ(z_);
+                return pp->SetZ(z_);              
             };
-            SetW = [this](float w_) {
-                return static_cast< model_t< T >& >(*this).d.SetW(w_);            
+            SetW = [pp](float w_) {
+                //return static_cast< model_t< T >& >(*this).d.SetW(w_);  
+                return pp->SetW(w_);            
             };
             Copy = [this]() {
                 return static_cast< const model_t< T >& >(*this).Copy();
-            };                   
+            };
+            Destroy = [this]() {
+                return static_cast< model_t< T >& >(*this).d.T::~T();
+            };                    
         }
         std::function< float () > GetX;
         std::function< float () > GetY;
@@ -188,6 +201,7 @@ struct wrapper_t {
         std::function< float (float) > SetZ;
         std::function< float (float) > SetW;
         std::function< base_t* () > Copy;
+        std::function< void () > Destroy;
     };
     template < typename T >
     struct model_t : base_t {
@@ -219,14 +233,16 @@ public:
     virtual ~Vector4Test() {}
 };
 
-std::vector< Vector4Test > A(1024), B(1024), C(1024);
+std::vector< shared_ptr< Vector4Test > > A(1024),
+                                         B(1024),
+                                         C(1024);
 void test(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 10024 ; ++i) {
-            C[i].SetX(A[i].GetX() + B[i].GetX());
-            C[i].SetY(A[i].GetY() + B[i].GetY());
-            C[i].SetZ(A[i].GetZ() + B[i].GetZ());
-            C[i].SetW(A[i].GetW() + B[i].GetW());
+        for (int i=0; i != 1024 ; ++i) {
+            C[i]->SetX(A[i]->GetX() + B[i]->GetX());
+            C[i]->SetY(A[i]->GetY() + B[i]->GetY());
+            C[i]->SetZ(A[i]->GetZ() + B[i]->GetZ());
+            C[i]->SetW(A[i]->GetW() + B[i]->GetW());
         }
 }
 
@@ -245,16 +261,21 @@ void testw(int NUM_TESTS) {
 
 
 int main(int argc, char** argv) {
+    for(int i = 0; i != 1024; ++i) {
+        A[i] = shared_ptr< Vector4Test >( new Vector4Test );
+        B[i] = shared_ptr< Vector4Test >( new Vector4Test );
+        C[i] = shared_ptr< Vector4Test >( new Vector4Test );
+    }
     int numtests = argc == 1 ? 1 : stoi(argv[1]);
     using myclock_t = chrono::high_resolution_clock;
     auto t1 = myclock_t::now();
-    test(numtests);
+    testw(numtests);
     auto t2 = myclock_t::now();
     auto d = t2 - t1;
     cout << double(chrono::nanoseconds(d).count()) / numtests << endl;
 
     t1 = myclock_t::now();
-    testw(numtests);
+    test(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << double(chrono::nanoseconds(d).count()) / numtests << endl;
