@@ -213,7 +213,95 @@ struct wrapper_t {
 };
 
 
-
+//------------------------------------------------------------------------------
+struct wrapper2_t {
+    float GetX() const { return model_->GetX(); }
+    float GetY() const { return model_->GetY(); }
+    float GetZ() const { return model_->GetZ(); }
+    float GetW() const { return model_->GetW(); }
+    float SetX( float x_ ) { return model_->SetX(x_); }
+    float SetY( float y_ ) { return model_->SetY(y_); }
+    float SetZ( float z_ ) { return model_->SetZ(z_); }
+    float SetW( float w_ ) { return model_->SetW(w_); }
+    wrapper2_t() = default;
+    wrapper2_t(wrapper2_t&& ) = default;
+    wrapper2_t(const wrapper2_t& w) : model_(w.model_->Copy()) {}
+    template < typename T >
+    wrapper2_t(const T& t) : model_(new model_t< T >(t)) {}
+    template < typename T >
+    T& get() {
+        return static_cast< model_t< T >& >(*model_).d;
+    }
+    struct base_t {
+        using GF = float (*)(const void* );
+        using SF = float (*)(void*, float);
+        template < typename T >
+        base_t(const T& t) {
+            const T* p = &static_cast< const model_t< T >* >(this)->d;
+            T* pp = &static_cast< model_t< T >* >(this)->d;
+            GetXImpl = (GF)([](const void* self) {
+                return reinterpret_cast< const model_t< T >* >(self)->d.GetX();
+                           
+            });
+            GetYImpl = (GF)([](const void* self) {
+                return reinterpret_cast< const model_t< T >* >(self)->d.GetY();
+                           
+            });
+            GetZImpl = (GF)([](const void* self) {
+                return reinterpret_cast< const model_t< T >* >(self)->d.GetZ();
+                           
+            });
+            GetWImpl = (GF)([](const void* self) {
+                return reinterpret_cast< const model_t< T >* >(self)->d.GetW();
+                           
+            });
+            SetXImpl = (SF)([](void* self, float x_) {
+                return reinterpret_cast< model_t< T >* >(self)->d.SetX(x_);
+            });
+            SetYImpl = (SF)([](void* self, float y_) {
+                return reinterpret_cast< model_t< T >* >(self)->d.SetY(y_);
+            });
+            SetZImpl = (SF)([](void* self, float z_) {
+                return reinterpret_cast< model_t< T >* >(self)->d.SetZ(z_);
+            });
+            SetWImpl = (SF)([](void* self, float w_) {
+                return reinterpret_cast< model_t< T >* >(self)->d.SetW(w_);
+            });
+            Copy = [this]() {
+                return static_cast< const model_t< T >& >(*this).Copy();
+            };
+            Destroy = [this]() {
+                return static_cast< model_t< T >& >(*this).d.T::~T();
+            };                    
+        }
+        float GetX() const { return GetXImpl(this); }
+        float GetY() const { return GetYImpl(this); }
+        float GetZ() const { return GetZImpl(this); }
+        float GetW() const { return GetWImpl(this); }
+        float SetX( float x_ ) { return SetXImpl(this, x_); }
+        float SetY( float y_ ) { return SetYImpl(this, y_); }
+        float SetZ( float z_ ) { return SetZImpl(this, z_); }
+        float SetW( float w_ ) { return SetWImpl(this, w_); }
+         
+        GF GetXImpl;
+        GF GetYImpl;
+        GF GetZImpl;
+        GF GetWImpl;
+        SF SetXImpl;
+        SF SetYImpl;
+        SF SetZImpl;
+        SF SetWImpl;
+        std::function< base_t* () > Copy;
+        std::function< void () > Destroy;
+    };
+    template < typename T >
+    struct model_t : base_t {
+        T d;
+        model_t(const T& t) : base_t(t), d(t) {}    
+        base_t* Copy() const { return new model_t(*this); }
+    };
+    unique_ptr< base_t > model_;
+};
 
 
 //from
@@ -259,8 +347,22 @@ void testw(int NUM_TESTS) {
         }
 }
 
+std::vector< wrapper2_t > Aw2(1024, wrapper2_t(Vector4Test())),
+                          Bw2(1024, wrapper2_t(Vector4Test())),  
+                          Cw2(1024, wrapper2_t(Vector4Test()));
+void testw2(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != 1024 ; ++i) {
+            Cw2[i].SetX(Aw2[i].GetX() + Bw2[i].GetX());
+            Cw2[i].SetY(Aw2[i].GetY() + Bw2[i].GetY());
+            Cw2[i].SetZ(Aw2[i].GetZ() + Bw2[i].GetZ());
+            Cw2[i].SetW(Aw2[i].GetW() + Bw2[i].GetW());
+        }
+}
+
 
 int main(int argc, char** argv) {
+
     for(int i = 0; i != 1024; ++i) {
         A[i] = shared_ptr< Vector4Test >( new Vector4Test );
         B[i] = shared_ptr< Vector4Test >( new Vector4Test );
