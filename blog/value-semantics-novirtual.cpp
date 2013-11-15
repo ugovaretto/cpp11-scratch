@@ -422,59 +422,107 @@ struct wrapper5_t {
 
 //------------------------------------------------------------------------------
 //pointer to members initialized in derived class
+//------------------------------------------------------------------------------
+template < typename R, typename P >
+struct Callback {
+    typedef R (*FuncType)(void*, P);
+    Callback() : func(0), obj(0) {}
+    Callback(const Callback&) = default;
+    Callback(FuncType f, void* o) : func(f), obj(o) {}
+    R operator()(P p) { return func(obj, p); }
+    FuncType func;
+    void* obj;
+};
 
-// struct wrapper6_t {
-//     float GetX() const { return model_->GetX(); }
-//     float GetY() const { return model_->GetY(); }
-//     float GetZ() const { return model_->GetZ(); }
-//     float GetW() const { return model_->GetW(); }
-//     float SetX( float x_ ) { return model_->SetX(x_); }
-//     float SetY( float y_ ) { return model_->SetY(y_); }
-//     float SetZ( float z_ ) { return model_->SetZ(z_); }
-//     float SetW( float w_ ) { return model_->SetW(w_); }
-//     wrapper6_t() = default;
-//     wrapper6_t(wrapper6_t&& ) = default;
-//     wrapper6_t(const wrapper6_t& w) : model_(w.model_->Copy()) {}
-//     template < typename T >
-//     wrapper6_t(const T& t) : model_(new model_t< T >(t)) {}
-//     template < typename T >
-//     T& get() {
-//         return static_cast< model_t< T >& >(*model_).d;
-//     }
-    
-//     struct base_t {
-//     using GF = Callback< float () >;
-//     using SF = Callback< float (float) >;
-//     using CP = Callback< base_t* () >; 
-//         GF GetX;
-//         GF GetY;
-//         GF GetZ;
-//         GF GetW;
-//         SF SetX;
-//         SF SetY;
-//         SF SetZ;
-//         SF SetW;
-//         CP Copy;
-//     };
-//     template < typename T >
-//     struct model_t : base_t {
-//         T d;
-//         model_t(const T& t) : d(t) {
-//             //etX = BIND_MEM_CB()
-//             // GetY = (util::GetCallbackFactory(&T::GetY ).Bind<&T::GetY >(&d));
-//             // GetZ = (util::GetCallbackFactory(&T::GetZ ).Bind<&T::GetZ >(&d));
-//             // GetW = (util::GetCallbackFactory(&T::GetW ).Bind<&T::GetW >(&d));
-//             // SetX = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
-//             // SetY = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
-//             // SetZ = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
-//             // SetW = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
-//             //Copy = BIND_MEM_CB((&model_t< T >::CopyImpl), this);
-//         }    
-//         base_t* CopyImpl() const { return new model_t< T >(*this);}
+template < typename R >
+struct Callback<R, void> {
+    typedef R (*FuncType)(const void*);
+    Callback(FuncType f, const void* o) : func(f), obj(o) {}
+    Callback(const Callback&) = default;
+    R operator()() { return func(obj); }
+    Callback() : func(0), obj(0) {}
+    FuncType func;
+    const void* obj;
+};
 
-//     };
-//     unique_ptr< base_t > model_;
+
+template < typename R, typename T, typename P, R (T::*Func)(P) >
+struct Wrapper {
+    static R Wrap(void* obj, P p) {
+        return (static_cast< T* >(obj)->*Func)(p);
+    } 
+};
+
+
+template < typename R, typename T, R (T::*Func)() const >
+struct WrapperV {
+    static R Wrap(const void* obj) {
+        return (static_cast< const T* >(obj)->*Func)();
+    } 
+};
+
+// template < typename T, void (T::*Func)() const>
+// struct WrapperV< void, T, Func > {
+//     static void Wrap(const void* obj) {
+//         (static_cast< const T* >(obj)->*Func)();
+//     } 
 // };
+
+struct wrapper6_t {
+    float GetX() const { return model_->GetX(); }
+    float GetY() const { return model_->GetY(); }
+    float GetZ() const { return model_->GetZ(); }
+    float GetW() const { return model_->GetW(); }
+    float SetX( float x_ ) { return model_->SetX(x_); }
+    float SetY( float y_ ) { return model_->SetY(y_); }
+    float SetZ( float z_ ) { return model_->SetZ(z_); }
+    float SetW( float w_ ) { return model_->SetW(w_); }
+    wrapper6_t() = default;
+    wrapper6_t(wrapper6_t&& ) = default;
+    wrapper6_t(const wrapper6_t& w) : model_(w.model_->Copy()) {}
+    template < typename T >
+    wrapper6_t(const T& t) : model_(new model_t< T >(t)) {}
+    template < typename T >
+    T& get() {
+        return static_cast< model_t< T >& >(*model_).d;
+    }
+    
+    struct base_t {
+    using GF = Callback< float, void >;
+    using SF = Callback< float, float >;
+    using CP = Callback< base_t*, void >; 
+        GF GetX;
+        GF GetY;
+        GF GetZ;
+        GF GetW;
+        SF SetX;
+        SF SetY;
+        SF SetZ;
+        SF SetW;
+        CP Copy;
+    };
+    template < typename T >
+    struct model_t : base_t {
+        T d;
+        model_t(const T& t) : d(t) {
+            GetX = GF(&WrapperV< float, T, &T::GetX >::Wrap, &d);
+            GetY = GF(&WrapperV< float, T, &T::GetY >::Wrap, &d);
+            GetZ = GF(&WrapperV< float, T, &T::GetZ >::Wrap, &d);
+            GetW = GF(&WrapperV< float, T, &T::GetW >::Wrap, &d);
+            SetX = SF(&Wrapper< float, T, float, &T::SetX >::Wrap, &d);
+            SetY = SF(&Wrapper< float, T, float, &T::SetY >::Wrap, &d);
+            SetZ = SF(&Wrapper< float, T, float, &T::SetZ >::Wrap, &d);
+            SetW = SF(&Wrapper< float, T, float, &T::SetW >::Wrap, &d);
+            Copy = CP(&WrapperV< base_t*, model_t< T >, &model_t< T >::CopyImpl >::Wrap, &d);
+        }    
+
+        base_t* CopyImpl() const { return new model_t< T >(*this);}
+
+    };
+    unique_ptr< base_t > model_;
+};
+
+
 
 //from
 //http://assemblyrequired.crashworks.org/2009/01/19/how-slow-are-virtual-functions-really
@@ -588,67 +636,20 @@ void testw5(int NUM_TESTS) {
         }
 }
 
-// std::vector< wrapper6_t > Aw6(1024, wrapper6_t(Vector4Test())),
-//                           Bw6(1024, wrapper6_t(Vector4Test())),  
-//                           Cw6(1024, wrapper5_t(Vector4Test()));
-// void testw6(int NUM_TESTS) {
-//     for (int n = 0 ; n != NUM_TESTS; ++n)
-//         for (int i=0; i != 1024 ; ++i) {
-//             Cw6[i].SetX(Aw6[i].GetX() + Bw6[i].GetX());
-//             Cw6[i].SetY(Aw6[i].GetY() + Bw6[i].GetY());
-//             Cw6[i].SetZ(Aw6[i].GetZ() + Bw6[i].GetZ());
-//             Cw6[i].SetW(Aw6[i].GetW() + Bw6[i].GetW());
-//         }
-// }
+std::vector< wrapper6_t > Aw6(1024, wrapper6_t(Vector4Test())),
+                          Bw6(1024, wrapper6_t(Vector4Test())),  
+                          Cw6(1024, wrapper6_t(Vector4Test()));
+void testw6(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != 1024 ; ++i) {
+            Cw6[i].SetX(Aw6[i].GetX() + Bw6[i].GetX());
+            Cw6[i].SetY(Aw6[i].GetY() + Bw6[i].GetY());
+            Cw6[i].SetZ(Aw6[i].GetZ() + Bw6[i].GetZ());
+            Cw6[i].SetW(Aw6[i].GetW() + Bw6[i].GetW());
+        }
+}
 //------------------------------------------------------------------------------
-template < typename R, typename P >
-struct Callback {
-    typedef R (*FuncType)(void*, P);
-    Callback(FuncType f, void* o) : func(f), obj(o) {}
-    R operator()(P p) { return func(obj, p); }
-    FuncType func;
-    void* obj;
-};
 
-template < typename R >
-struct Callback<R, void> {
-    typedef R (*FuncType)(void*);
-    Callback(FuncType f, void* o) : func(f), obj(o) {}
-    R operator()() { return func(obj); }
-    FuncType func;
-    void* obj;
-};
-
-template <>
-struct Callback<void, void> {
-    typedef void (*FuncType)(void*);
-    Callback(FuncType f, void* o) : func(f), obj(o) {}
-    void operator()() { func(obj); }
-    FuncType func;
-    void* obj;
-};
-
-
-template < typename R, typename T, typename P, R (T::*Func)(P) >
-struct Wrapper {
-    static R Wrap(void* obj, P p) {
-        return (static_cast< T* >(obj)->*Func)(p);
-    } 
-};
-
-// template < typename R, typename T, R (T::*Func)() >
-// struct Wrapper< R, T, void, Func > {
-//     static R Wrap(void* obj) {
-//         return (static_cast< T* >(obj)->*Func)();
-//     } 
-// };
-
-// template < typename T, void (T::*Func)()  >
-// struct Wrapper< void, T, void, Func > {
-//     static void Wrap(void* obj) {
-//         (static_cast< T* >(obj)->*Func)();
-//     } 
-// };
 
 class Foo {
 public:
@@ -657,19 +658,20 @@ public:
     float MemberFunction(float x) { return x; }
 };
 
-void test_Callback() {
-    Foo f;
-    Callback< float, float > c1(
-        &Wrapper< float, Foo, float, &Foo::MemberFunction>::Wrap, &f);
-    // Callback< float, float > c2 = 
-    //     &Wrapper< float, Foo, float, &Foo::MemberFunction>::Wrap, &f);
-    // std::cout << c1() << ' ' << c2(2.0f) << endl;
-    cout << c1(3) << endl;
-}
+// void test_Callback() {
+//     Foo f;
+//     Callback< float, float > c1(
+//         &Wrapper< float, Foo, float, &Foo::MemberFunction>::Wrap, &f);
+    
+//     Callback< float, void > c2
+//         (&WrapperV< float, Foo, &Foo::ConstMemberFunction>::Wrap, &f);
+//     std::cout << c1(2.0f) << ' ' << c2() << endl;
+//     cout << c1(3) << endl;
+// }
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
-    test_Callback();
+    //test_Callback();
 
     for(int i = 0; i != 1024; ++i) {
         A[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
@@ -731,6 +733,13 @@ int main(int argc, char** argv) {
     d = t2 - t1;
     cout << "Pointer to members:              "
          << (chrono::nanoseconds(d).count()) / calls << endl;
+
+    t1 = myclock_t::now();
+    testw6(numtests);
+    t2 = myclock_t::now();
+    d = t2 - t1;
+    cout << "XXXXXXXXXXXXXXXXXXX:              "
+         << (chrono::nanoseconds(d).count()) / calls << endl;     
 
     return 0;
 }
