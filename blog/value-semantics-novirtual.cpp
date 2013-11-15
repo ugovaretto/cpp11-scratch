@@ -1,4 +1,6 @@
-#include <iostream>
+//Author: Ugo Varetto
+//Benchmark of various approaches to value semantincs with and without virtual
+//functions
 #include <cassert>
 #include <functional>
 #include <memory>
@@ -7,123 +9,10 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <iostream>
 #include "function.h"
 
 using namespace std;
-#if 0
-#if novirtual
-struct wrapper_t {
-    //std::function< void () > foo;
-    void foo() {model_->foo();}
-    template < typename T >
-    wrapper_t(const T& t) : model_(new model_t< T >(t)) {
-        //can point directly to the model_t.d data member but then
-        //at each copy/assignment functions have to be recreated
-        
-    }
-    template < typename T >
-    T& get() {
-        return static_cast< model_t< T >& >(*model_).d;
-    }
-    struct base_t {
-        template < typename T >
-        base_t(const T& t) {
-            foo = [=]() {
-                static_cast< model_t< T >& >(*this).d.foo();            
-            };  
-        }
-        std::function< void () > foo;
-    };
-    template < typename T >
-    struct model_t : base_t {
-        T d;
-        model_t(const T& t) : base_t(t), d(t) {}    
-    };
-    unique_ptr< base_t > model_;
-};
-#else
-
-
-
-struct wrapper_t {
-    template < typename T >
-    wrapper_t(const T& t) : model_(new model_t< T >(t)) {
-    }
-    void foo() { model_->foo();}
-    struct base_t {
-        virtual void foo() = 0;
-        virtual ~base_t() {}
-    };
-    template < typename T >
-    T& get() {
-        return static_cast< model_t< T >& >(*model_).d;
-    }
-    template < typename T >
-    struct model_t : base_t {
-        T d;
-        void foo() { d.foo(); }
-        model_t(const T& t) : d(t) {}    
-    };
-    unique_ptr< base_t > model_;
-};
-#endif
-
-inline double diff(const timespec& start,
-                   const timespec& stop) {
-    return stop.tv_nsec - start.tv_nsec;
-} 
-struct atype_t {
-    int i;
-    void foo() {
-        i = 2 + 4;
-        i *= i;
-    }
-};
-
-int main(int, char**) {
-    timespec start, stop;
-    using myclock_t = chrono::high_resolution_clock;
-    timespec time1, time2;
-     atype_t at;
-     wrapper_t w((atype_t()));
-    for(int i = 0; i != 1000; ++i) {
-
-    clock_gettime(CLOCK_MONOTONIC, &start); 
-    // t1 = myclock_t::now();
-    w.foo();
-    // t2 = myclock_t::now();
-    // d = t2 - t1;
-    // cout << chrono::nanoseconds(d).count() << endl;
-    // cout << endl;
-    clock_gettime(CLOCK_MONOTONIC, &stop); 
-    cout << diff(start, stop) << endl;
-    cout << endl;
-
-    clock_gettime(CLOCK_MONOTONIC, &start); 
-    //auto t1 = myclock_t::now();
-    at.foo();
-    //auto t2 = myclock_t::now();
-    //auto d = t2 - t1;
-    clock_gettime(CLOCK_MONOTONIC, &stop);
-    //cout << chrono::nanoseconds(d).count() << endl;
-    cout << diff(start, stop) << endl;
-
-    clock_gettime(CLOCK_MONOTONIC, &start); 
-    // //t1 = myclock_t::now();
-    w.get<atype_t>().foo();
-    // //t.foo();
-    // //t2 = myclock_t::now();
-    // d = t2 - t1;
-    // cout << chrono::nanoseconds(d).count() << endl;
-    clock_gettime(CLOCK_MONOTONIC, &stop);
-    //cout << chrono::nanoseconds(d).count() << endl;
-    cout << diff(start, stop) << endl;
-   
-
-    }
-    return 0;
-}
-#else
 
 #ifdef NOVIRTUAL
 #define VIR
@@ -352,45 +241,6 @@ public:
 };
 
 //------------------------------------------------------------------------------
-std::vector< shared_ptr< Vector4TestV > > A(1024),
-                                          B(1024),
-                                          C(1024);
-void test(int NUM_TESTS) {
-    for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
-            C[i]->SetX(A[i]->GetX() + B[i]->GetX());
-            C[i]->SetY(A[i]->GetY() + B[i]->GetY());
-            C[i]->SetZ(A[i]->GetZ() + B[i]->GetZ());
-            C[i]->SetW(A[i]->GetW() + B[i]->GetW());
-        }
-}
-
-std::vector< wrapper_t > Aw(1024, wrapper_t(Vector4Test())),
-                         Bw(1024, wrapper_t(Vector4Test())),  
-                         Cw(1024, wrapper_t(Vector4Test()));
-void testw(int NUM_TESTS) {
-    for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
-            Cw[i].SetX(Aw[i].GetX() + Bw[i].GetX());
-            Cw[i].SetY(Aw[i].GetY() + Bw[i].GetY());
-            Cw[i].SetZ(Aw[i].GetZ() + Bw[i].GetZ());
-            Cw[i].SetW(Aw[i].GetW() + Bw[i].GetW());
-        }
-}
-
-std::vector< wrapper2_t > Aw2(1024, wrapper2_t((Vector4Test()))),
-                          Bw2(1024, wrapper2_t((Vector4Test()))),  
-                          Cw2(1024, wrapper2_t((Vector4Test())));
-void testw2(int NUM_TESTS) {
-    for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
-            Cw2[i].SetX(Aw2[i].GetX() + Bw2[i].GetX());
-            Cw2[i].SetY(Aw2[i].GetY() + Bw2[i].GetY());
-            Cw2[i].SetZ(Aw2[i].GetZ() + Bw2[i].GetZ());
-            Cw2[i].SetW(Aw2[i].GetW() + Bw2[i].GetW());
-        }
-}
-//------------------------------------------------------------------------------
 //virtual
 struct wrapper3_t {
     float GetX() const { return model_->GetX(); }
@@ -440,18 +290,7 @@ struct wrapper3_t {
     unique_ptr< base_t > model_;
 };
 
-std::vector< wrapper3_t > Aw3(1024, wrapper3_t(Vector4Test())),
-                          Bw3(1024, wrapper3_t(Vector4Test())),  
-                          Cw3(1024, wrapper3_t(Vector4Test()));
-void testw3(int NUM_TESTS) {
-    for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
-            Cw3[i].SetX(Aw3[i].GetX() + Bw3[i].GetX());
-            Cw3[i].SetY(Aw3[i].GetY() + Bw3[i].GetY());
-            Cw3[i].SetZ(Aw3[i].GetZ() + Bw3[i].GetZ());
-            Cw3[i].SetW(Aw3[i].GetW() + Bw3[i].GetW());
-        }
-}
+
 //------------------------------------------------------------------------------
 //alternate std::function implementation
 struct wrapper4_t {
@@ -534,33 +373,6 @@ struct wrapper4_t {
         base_t* Copy() const { return new model_t(*this); }
     };
     unique_ptr< base_t > model_;
-};
-std::vector< wrapper4_t > Aw4(1024, wrapper4_t(Vector4Test())),
-                          Bw4(1024, wrapper4_t(Vector4Test())),  
-                          Cw4(1024, wrapper4_t(Vector4Test()));
-void testw4(int NUM_TESTS) {
-    for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
-            Cw4[i].SetX(Aw4[i].GetX() + Bw4[i].GetX());
-            Cw4[i].SetY(Aw4[i].GetY() + Bw4[i].GetY());
-            Cw4[i].SetZ(Aw4[i].GetZ() + Bw4[i].GetZ());
-            Cw4[i].SetW(Aw4[i].GetW() + Bw4[i].GetW());
-        }
-}
-
-struct Base {
-    void bar() {}
-    void foo() {std::cout << "B\n";}
-    void mimpl() { (this->*m)();}
-    using M = void (Base::*)();
-    M m;
-};
-
-struct Derived : Base {
-    Derived() {
-        m = (M) &Derived::foo;
-    }
-    void foo() {std::cout << "C\n";}
 };
 
 //------------------------------------------------------------------------------
@@ -650,6 +462,74 @@ struct wrapper5_t {
     //unique_ptr< base_t > model_;
     //~wrapper5_t() {model_->base_t::~base_t();}
 };
+
+//------------------------------------------------------------------------------
+std::vector< shared_ptr< Vector4TestV > > A(1024),
+                                          B(1024),
+                                          C(1024);
+void test(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != 1024 ; ++i) {
+            C[i]->SetX(A[i]->GetX() + B[i]->GetX());
+            C[i]->SetY(A[i]->GetY() + B[i]->GetY());
+            C[i]->SetZ(A[i]->GetZ() + B[i]->GetZ());
+            C[i]->SetW(A[i]->GetW() + B[i]->GetW());
+        }
+}
+
+std::vector< wrapper_t > Aw(1024, wrapper_t(Vector4Test())),
+                         Bw(1024, wrapper_t(Vector4Test())),  
+                         Cw(1024, wrapper_t(Vector4Test()));
+void testw(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != 1024 ; ++i) {
+            Cw[i].SetX(Aw[i].GetX() + Bw[i].GetX());
+            Cw[i].SetY(Aw[i].GetY() + Bw[i].GetY());
+            Cw[i].SetZ(Aw[i].GetZ() + Bw[i].GetZ());
+            Cw[i].SetW(Aw[i].GetW() + Bw[i].GetW());
+        }
+}
+
+std::vector< wrapper2_t > Aw2(1024, wrapper2_t((Vector4Test()))),
+                          Bw2(1024, wrapper2_t((Vector4Test()))),  
+                          Cw2(1024, wrapper2_t((Vector4Test())));
+void testw2(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != 1024 ; ++i) {
+            Cw2[i].SetX(Aw2[i].GetX() + Bw2[i].GetX());
+            Cw2[i].SetY(Aw2[i].GetY() + Bw2[i].GetY());
+            Cw2[i].SetZ(Aw2[i].GetZ() + Bw2[i].GetZ());
+            Cw2[i].SetW(Aw2[i].GetW() + Bw2[i].GetW());
+        }
+}
+
+std::vector< wrapper3_t > Aw3(1024, wrapper3_t(Vector4Test())),
+                          Bw3(1024, wrapper3_t(Vector4Test())),  
+                          Cw3(1024, wrapper3_t(Vector4Test()));
+void testw3(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != 1024 ; ++i) {
+            Cw3[i].SetX(Aw3[i].GetX() + Bw3[i].GetX());
+            Cw3[i].SetY(Aw3[i].GetY() + Bw3[i].GetY());
+            Cw3[i].SetZ(Aw3[i].GetZ() + Bw3[i].GetZ());
+            Cw3[i].SetW(Aw3[i].GetW() + Bw3[i].GetW());
+        }
+}
+
+
+std::vector< wrapper4_t > Aw4(1024, wrapper4_t(Vector4Test())),
+                          Bw4(1024, wrapper4_t(Vector4Test())),  
+                          Cw4(1024, wrapper4_t(Vector4Test()));
+void testw4(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != 1024 ; ++i) {
+            Cw4[i].SetX(Aw4[i].GetX() + Bw4[i].GetX());
+            Cw4[i].SetY(Aw4[i].GetY() + Bw4[i].GetY());
+            Cw4[i].SetZ(Aw4[i].GetZ() + Bw4[i].GetZ());
+            Cw4[i].SetW(Aw4[i].GetW() + Bw4[i].GetW());
+        }
+}
+
 std::vector< wrapper5_t > Aw5(1024, wrapper5_t(Vector4Test())),
                           Bw5(1024, wrapper5_t(Vector4Test())),  
                           Cw5(1024, wrapper5_t(Vector4Test()));
@@ -663,6 +543,7 @@ void testw5(int NUM_TESTS) {
         }
 }
 
+//------------------------------------------------------------------------------
 int main(int argc, char** argv) {
 
     for(int i = 0; i != 1024; ++i) {
@@ -671,52 +552,60 @@ int main(int argc, char** argv) {
         C[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
     }
     int numtests = argc == 1 ? 1 : stoi(argv[1]);
+    const int calls = numtests * 1024; 
     using myclock_t = chrono::high_resolution_clock;
+    using duration  = chrono::high_resolution_clock::duration;
+    using timepoint = chrono::high_resolution_clock::time_point;
 
-    auto t1 = myclock_t::now();
-    testw(numtests);
-    auto t2 = myclock_t::now();
-    auto d = t2 - t1;
-    cout << "std::function:                   "
-         << double(chrono::nanoseconds(d).count()) / numtests << endl;
+    cout << "\nSingle method execution time (ns)\n"
+         << "-----------------------------------\n";
+    
+    timepoint t1 = myclock_t::now();
+    test(numtests);
+    timepoint t2 = myclock_t::now();
+    duration d = t2 - t1;
+
+#ifdef NOVIRTUAL    
+    cout << "Reference (non-virtual):         "
+#else
+    cout << "Reference (virtual):             "
+#endif     
+         << (chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
-    test(numtests);
+    testw(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "Reference:                       "
-         << double(chrono::nanoseconds(d).count()) / numtests << endl;
+    cout << "std::function:                   "
+         << (chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw2(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Function pointers:               "
-         << double(chrono::nanoseconds(d).count()) / numtests << endl;
+         << (chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw3(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Virtual:                         "
-         << double(chrono::nanoseconds(d).count()) / numtests << endl;
+         << (chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw4(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Alternative to std::function:    "
-         << double(chrono::nanoseconds(d).count()) / numtests << endl;
+         << (chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw5(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Pointer to members:              "
-         <<double(chrono::nanoseconds(d).count()) / numtests << endl;
+         << (chrono::nanoseconds(d).count()) / calls << endl;
 
     return 0;
 }
-
-#endif
-
