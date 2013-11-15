@@ -1,6 +1,9 @@
 //Author: Ugo Varetto
 //Benchmark of various approaches to value semantincs with and without virtual
 //functions
+//TODO: check destroy policy: for non-virtual derived class the run-time invokes
+//the base class destructor it is therefore required that the base destructor
+//invokes the derived instance destructor
 #include <cassert>
 #include <functional>
 #include <memory>
@@ -194,7 +197,6 @@ struct wrapper2_t {
         model_t(const T& t) : base_t(t), d(t){ }
         base_t* Copy() const { return new model_t(*this); }
     };
-    std::vector< char > storage_;
     unique_ptr< base_t > model_;
 };
 using GF = float (*)(const void* );
@@ -387,22 +389,10 @@ struct wrapper5_t {
     float SetZ( float z_ ) { return model_->SetZ(z_); }
     float SetW( float w_ ) { return model_->SetW(w_); }
     wrapper5_t() = default;
-    // wrapper5_t(wrapper5_t&& w) : model_(&storage_0) {
-    //     memcpy(storage_, w.storage, 0x100);
-    // }
-
-    wrapper5_t(const wrapper5_t& w) : model_((base_t*)&storage_[0]) {
-        w.model_->Copy(&storage_[0]);
-    }
+    wrapper5_t(wrapper5_t&& ) = default;
+    wrapper5_t(const wrapper5_t& w) : model_(w.model_->Copy()) {}
     template < typename T >
-    wrapper5_t(const T& t) : model_((base_t*)&storage_[0]) {
-        new (&storage_[0]) model_t< T >(t);
-    }
-
-    wrapper5_t& operator=(wrapper5_t w) {
-        memcpy(storage_, w.storage_, 0x100);
-        return *this;
-    }
+    wrapper5_t(const T& t) : model_(new model_t< T >(t)) {}
     template < typename T >
     T& get() {
         return static_cast< model_t< T >& >(*model_).d;
@@ -416,10 +406,10 @@ struct wrapper5_t {
         float SetY( float y_ ) {return (this->*SetYImpl)(y_);}
         float SetZ( float z_ ) {return (this->*SetZImpl)(z_);}
         float SetW( float w_ ) {return (this->*SetWImpl)(w_);}
-        void Copy(void* addr) const { (this->*CopyImpl)(addr);}
+        base_t* Copy() const { return (this->*CopyImpl)();}
         using GF = float (base_t::*)() const;
         using SF = float (base_t::*)(float);
-        using CP = void (base_t::*)(void*) const; 
+        using CP = base_t* (base_t::*)() const; 
         GF GetXImpl;
         GF GetYImpl;
         GF GetZImpl;
@@ -445,7 +435,6 @@ struct wrapper5_t {
             SetWImpl = (SF) &model_t< T >::SetW;
             CopyImpl = (CP) &model_t< T >::Copy;
         }    
-        base_t* Copy() const { return new model_t(*this); }
         float GetX() const { return d.GetX(); }
         float GetY() const { return d.GetY(); }
         float GetZ() const { return d.GetZ(); }
@@ -454,13 +443,10 @@ struct wrapper5_t {
         float SetY( float y_ ) { return d.SetY(y_); }
         float SetZ( float z_ ) { return d.SetZ(z_); }
         float SetW( float w_ ) { return d.SetW(w_); }
-        void Copy(void* addr) const { new (addr) model_t< T >(*this);}
+        base_t* Copy() const { return new model_t< T >(*this);}
 
     };
-    base_t* model_;
-    char storage_[0x100];
-    //unique_ptr< base_t > model_;
-    //~wrapper5_t() {model_->base_t::~base_t();}
+    unique_ptr< base_t > model_;
 };
 
 //------------------------------------------------------------------------------
