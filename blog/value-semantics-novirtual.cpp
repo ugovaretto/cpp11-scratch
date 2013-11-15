@@ -14,6 +14,7 @@
 #include <cstring>
 #include <iostream>
 #include "function.h"
+#include "callback.hpp"
 
 using namespace std;
 
@@ -211,36 +212,6 @@ SF wrapper2_t::base_t::SetYImpl = nullptr;
 SF wrapper2_t::base_t::SetZImpl = nullptr;
 SF wrapper2_t::base_t::SetWImpl = nullptr;
 CP wrapper2_t::base_t::CopyImpl = nullptr;
-//from
-//http://assemblyrequired.crashworks.org/2009/01/19/how-slow-are-virtual-functions-really
-//------------------------------------------------------------------------------
-class Vector4TestV /*final*/ {
-  float x,y,z,w;
-public:
-    VIR float GetX() const  { return x; }
-    VIR float GetY() const  { return y; }
-    VIR float GetZ() const  { return z; }
-    VIR float GetW() const  { return w; }
-    VIR float SetX( float x_ )  { return x = x_; }
-    VIR float SetY( float y_ )  { return y = y_; }
-    VIR float SetZ( float z_ )  { return z = z_; }
-    VIR float SetW( float w_ )  { return w = w_; }
-    VIR ~Vector4TestV() {}
-};
-
-class Vector4Test {
-  float x,y,z,w;
-public:
-    float GetX() const { return x; }
-    float GetY() const { return y; }
-    float GetZ() const { return z; }
-    float GetW() const { return w; }
-    float SetX( float x_ ) { return x = x_; }
-    float SetY( float y_ ) { return y = y_; }
-    float SetZ( float z_ ) { return z = z_; }
-    float SetW( float w_ ) { return w = w_; }
-    ~Vector4Test() {}
-};
 
 //------------------------------------------------------------------------------
 //virtual
@@ -450,6 +421,94 @@ struct wrapper5_t {
 };
 
 //------------------------------------------------------------------------------
+//pointer to members initialized in derived class
+
+// struct wrapper6_t {
+//     float GetX() const { return model_->GetX(); }
+//     float GetY() const { return model_->GetY(); }
+//     float GetZ() const { return model_->GetZ(); }
+//     float GetW() const { return model_->GetW(); }
+//     float SetX( float x_ ) { return model_->SetX(x_); }
+//     float SetY( float y_ ) { return model_->SetY(y_); }
+//     float SetZ( float z_ ) { return model_->SetZ(z_); }
+//     float SetW( float w_ ) { return model_->SetW(w_); }
+//     wrapper6_t() = default;
+//     wrapper6_t(wrapper6_t&& ) = default;
+//     wrapper6_t(const wrapper6_t& w) : model_(w.model_->Copy()) {}
+//     template < typename T >
+//     wrapper6_t(const T& t) : model_(new model_t< T >(t)) {}
+//     template < typename T >
+//     T& get() {
+//         return static_cast< model_t< T >& >(*model_).d;
+//     }
+    
+//     struct base_t {
+//     using GF = Callback< float () >;
+//     using SF = Callback< float (float) >;
+//     using CP = Callback< base_t* () >; 
+//         GF GetX;
+//         GF GetY;
+//         GF GetZ;
+//         GF GetW;
+//         SF SetX;
+//         SF SetY;
+//         SF SetZ;
+//         SF SetW;
+//         CP Copy;
+//     };
+//     template < typename T >
+//     struct model_t : base_t {
+//         T d;
+//         model_t(const T& t) : d(t) {
+//             //etX = BIND_MEM_CB()
+//             // GetY = (util::GetCallbackFactory(&T::GetY ).Bind<&T::GetY >(&d));
+//             // GetZ = (util::GetCallbackFactory(&T::GetZ ).Bind<&T::GetZ >(&d));
+//             // GetW = (util::GetCallbackFactory(&T::GetW ).Bind<&T::GetW >(&d));
+//             // SetX = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
+//             // SetY = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
+//             // SetZ = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
+//             // SetW = (util::GetCallbackFactory(&T::SetX).Bind<&T::SetX>(&d));
+//             //Copy = BIND_MEM_CB((&model_t< T >::CopyImpl), this);
+//         }    
+//         base_t* CopyImpl() const { return new model_t< T >(*this);}
+
+//     };
+//     unique_ptr< base_t > model_;
+// };
+
+//from
+//http://assemblyrequired.crashworks.org/2009/01/19/how-slow-are-virtual-functions-really
+//------------------------------------------------------------------------------
+class Vector4TestV /*final*/ {
+  float x = 0, y = 0, z = 0, w = 0;
+public:
+    VIR float GetX() const  { return x; }
+    VIR float GetY() const  { return y; }
+    VIR float GetZ() const  { return z; }
+    VIR float GetW() const  { return w; }
+    VIR float SetX( float x_ )  { return x = x_; }
+    VIR float SetY( float y_ )  { return y = y_; }
+    VIR float SetZ( float z_ )  { return z = z_; }
+    VIR float SetW( float w_ )  { return w = w_; }
+    VIR ~Vector4TestV() {}
+};
+
+class Vector4Test {
+  float x = 0, y = 0, z = 0, w = 0;
+public:
+    float GetX() const { return x; }
+    float GetY() const { return y; }
+    float GetZ() const { return z; }
+    float GetW() const { return w; }
+    float SetX( float x_ ) { return x = x_; }
+    float SetY( float y_ ) { return y = y_; }
+    float SetZ( float z_ ) { return z = z_; }
+    float SetW( float w_ ) { return w = w_; }
+    ~Vector4Test() {}
+};
+
+
+//------------------------------------------------------------------------------
 std::vector< shared_ptr< Vector4TestV > > A(1024),
                                           B(1024),
                                           C(1024);
@@ -529,8 +588,88 @@ void testw5(int NUM_TESTS) {
         }
 }
 
+// std::vector< wrapper6_t > Aw6(1024, wrapper6_t(Vector4Test())),
+//                           Bw6(1024, wrapper6_t(Vector4Test())),  
+//                           Cw6(1024, wrapper5_t(Vector4Test()));
+// void testw6(int NUM_TESTS) {
+//     for (int n = 0 ; n != NUM_TESTS; ++n)
+//         for (int i=0; i != 1024 ; ++i) {
+//             Cw6[i].SetX(Aw6[i].GetX() + Bw6[i].GetX());
+//             Cw6[i].SetY(Aw6[i].GetY() + Bw6[i].GetY());
+//             Cw6[i].SetZ(Aw6[i].GetZ() + Bw6[i].GetZ());
+//             Cw6[i].SetW(Aw6[i].GetW() + Bw6[i].GetW());
+//         }
+// }
+//------------------------------------------------------------------------------
+template < typename R, typename P >
+struct Callback {
+    typedef R (*FuncType)(void*, P);
+    Callback(FuncType f, void* o) : func(f), obj(o) {}
+    R operator()(P p) { return func(obj, p); }
+    FuncType func;
+    void* obj;
+};
+
+template < typename R >
+struct Callback<R, void> {
+    typedef R (*FuncType)(void*);
+    Callback(FuncType f, void* o) : func(f), obj(o) {}
+    R operator()() { return func(obj); }
+    FuncType func;
+    void* obj;
+};
+
+template <>
+struct Callback<void, void> {
+    typedef void (*FuncType)(void*);
+    Callback(FuncType f, void* o) : func(f), obj(o) {}
+    void operator()() { func(obj); }
+    FuncType func;
+    void* obj;
+};
+
+
+template < typename R, typename T, typename P, R (T::*Func)(P) >
+struct Wrapper {
+    static R Wrap(void* obj, P p) {
+        return (static_cast< T* >(obj)->*Func)(p);
+    } 
+};
+
+// template < typename R, typename T, R (T::*Func)() >
+// struct Wrapper< R, T, void, Func > {
+//     static R Wrap(void* obj) {
+//         return (static_cast< T* >(obj)->*Func)();
+//     } 
+// };
+
+// template < typename T, void (T::*Func)()  >
+// struct Wrapper< void, T, void, Func > {
+//     static void Wrap(void* obj) {
+//         (static_cast< T* >(obj)->*Func)();
+//     } 
+// };
+
+class Foo {
+public:
+    Foo() {}
+    float ConstMemberFunction()  { return 1.0f; }
+    float MemberFunction(float x) { return x; }
+};
+
+void test_Callback() {
+    Foo f;
+    Callback< float, float > c1(
+        &Wrapper< float, Foo, float, &Foo::MemberFunction>::Wrap, &f);
+    // Callback< float, float > c2 = 
+    //     &Wrapper< float, Foo, float, &Foo::MemberFunction>::Wrap, &f);
+    // std::cout << c1() << ' ' << c2(2.0f) << endl;
+    cout << c1(3) << endl;
+}
+
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
+    test_Callback();
 
     for(int i = 0; i != 1024; ++i) {
         A[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
