@@ -133,69 +133,74 @@ struct wrapper2_t {
         using GF = float (*)(const void* );
         using SF = float (*)(void*, float);
         using CP = base_t* (*)(const void*);
+        struct vtable {
+             static GF GetXImpl;
+            static GF GetYImpl;
+            static GF GetZImpl;
+            static GF GetWImpl;
+            static SF SetXImpl;
+            static SF SetYImpl;
+            static SF SetZImpl;
+            static SF SetWImpl;
+
+        };
         template < typename T >
         base_t(const T& ) {
             BuildVTable< T >();
+           
         }
         template < typename T >
         void BuildVTable() {
-            if(!GetXImpl) {
-            GetXImpl = (GF)([](const void* self) {
+            if(!vtable::GetXImpl) {
+            vtable::GetXImpl = (GF)([](const void* self) {
                 return reinterpret_cast< const model_t< T >* >(self)->d.GetX();
                            
             });
-            GetYImpl = (GF)([](const void* self) {
+            vtable::GetYImpl = (GF)([](const void* self) {
                 return reinterpret_cast< const model_t< T >* >(self)->d.GetY();
                            
             });
-            GetZImpl = (GF)([](const void* self) {
+            vtable::GetZImpl = (GF)([](const void* self) {
                 return reinterpret_cast< const model_t< T >* >(self)->d.GetZ();
                            
             });
-            GetWImpl = (GF)([](const void* self) {
+            vtable::GetWImpl = (GF)([](const void* self) {
                 return reinterpret_cast< const model_t< T >* >(self)->d.GetW();
                            
             });
-            SetXImpl = (SF)([](void* self, float x_) {
+            vtable::SetXImpl = (SF)([](void* self, float x_) {
                 return reinterpret_cast< model_t< T >* >(self)->d.SetX(x_);
             });
-            SetYImpl = (SF)([](void* self, float y_) {
+            vtable::SetYImpl = (SF)([](void* self, float y_) {
                 return reinterpret_cast< model_t< T >* >(self)->d.SetY(y_);
             });
-            SetZImpl = (SF)([](void* self, float z_) {
+            vtable::SetZImpl = (SF)([](void* self, float z_) {
                 return reinterpret_cast< model_t< T >* >(self)->d.SetZ(z_);
             });
-            SetWImpl = (SF)([](void* self, float w_) {
+            vtable::SetWImpl = (SF)([](void* self, float w_) {
                 return reinterpret_cast< model_t< T >* >(self)->d.SetW(w_);
             });
-            CopyImpl = (CP) ([](const void* self) {
+            CopyImpl = (CP)([](const void* self) {
                 return reinterpret_cast< const model_t< T >* >(self)->Copy();
             });
             }
         }
-        float GetX() const { return GetXImpl(this); }
-        float GetY() const { return GetYImpl(this); }
-        float GetZ() const { return GetZImpl(this); }
-        float GetW() const { return GetWImpl(this); }
-        float SetX(float x_) { return SetXImpl(this, x_); }
-        float SetY(float y_) { return SetYImpl(this, y_); }
-        float SetZ(float z_) { return SetZImpl(this, z_); }
-        float SetW(float w_) { return SetWImpl(this, w_); }
+        float GetX() const { return vtable::GetXImpl(this); }
+        float GetY() const { return vtable::GetYImpl(this); }
+        float GetZ() const { return vtable::GetZImpl(this); }
+        float GetW() const { return vtable::GetWImpl(this); }
+        float SetX(float x_) { return vtable::SetXImpl(this, x_); }
+        float SetY(float y_) { return vtable::SetYImpl(this, y_); }
+        float SetZ(float z_) { return vtable::SetZImpl(this, z_); }
+        float SetW(float w_) { return vtable::SetWImpl(this, w_); }
         base_t* Copy() const { return CopyImpl(this); }       
-        static GF GetXImpl;
-        static GF GetYImpl;
-        static GF GetZImpl;
-        static GF GetWImpl;
-        static SF SetXImpl;
-        static SF SetYImpl;
-        static SF SetZImpl;
-        static SF SetWImpl;
+        
         static CP CopyImpl;
     };
     template < typename T >
     struct model_t : base_t {
         T d;
-        model_t(const T& t) : base_t(t), d(t){ }
+        model_t(const T& t) : base_t(t), d(t) {}
         base_t* Copy() const { return new model_t(*this); }
     };
     unique_ptr< base_t > model_;
@@ -203,14 +208,14 @@ struct wrapper2_t {
 using GF = float (*)(const void* );
 using SF = float (*)(void*, float);
 using CP = wrapper2_t::base_t* (*)(const void*);
-GF wrapper2_t::base_t::GetXImpl = nullptr;
-GF wrapper2_t::base_t::GetYImpl = nullptr;
-GF wrapper2_t::base_t::GetZImpl = nullptr;
-GF wrapper2_t::base_t::GetWImpl = nullptr;
-SF wrapper2_t::base_t::SetXImpl = nullptr;
-SF wrapper2_t::base_t::SetYImpl = nullptr;
-SF wrapper2_t::base_t::SetZImpl = nullptr;
-SF wrapper2_t::base_t::SetWImpl = nullptr;
+GF wrapper2_t::base_t::vtable::GetXImpl = nullptr;
+GF wrapper2_t::base_t::vtable::GetYImpl = nullptr;
+GF wrapper2_t::base_t::vtable::GetZImpl = nullptr;
+GF wrapper2_t::base_t::vtable::GetWImpl = nullptr;
+SF wrapper2_t::base_t::vtable::SetXImpl = nullptr;
+SF wrapper2_t::base_t::vtable::SetYImpl = nullptr;
+SF wrapper2_t::base_t::vtable::SetZImpl = nullptr;
+SF wrapper2_t::base_t::vtable::SetWImpl = nullptr;
 CP wrapper2_t::base_t::CopyImpl = nullptr;
 
 //------------------------------------------------------------------------------
@@ -326,7 +331,7 @@ struct wrapper4_t {
                 return static_cast< const model_t< T >& >(*this).Copy();
             };
             Destroy = [this]() {
-                return static_cast< model_t< T >& >(*this).d.T::~T();
+                static_cast< model_t< T >& >(*this).d.T::~T();
             };                    
         }
         func::function< float () > GetX;
@@ -477,7 +482,7 @@ struct Callback<R, void> {
 template < typename R, typename T, typename P, R (T::*Func)(P) >
 
     R Wrapper(void* __restrict__ obj, P p) {
-        T* pp = static_cast< T* >(obj);
+        T* pp = reinterpret_cast< T* >(obj);
         return (pp->*Func)(p);
     } 
 
@@ -486,7 +491,7 @@ template < typename R, typename T, typename P, R (T::*Func)(P) >
 template < typename R, typename T, typename P, R (T::*Func)(P) const >
 
     static R WrapperC(const void* __restrict__ obj, P p) {
-        const T* pp = static_cast< const T* >(obj);
+        const T* pp = reinterpret_cast< const T* >(obj);
         return (pp->*Func)(p);
     } 
     
@@ -495,7 +500,7 @@ template < typename R, typename T, typename P, R (T::*Func)(P) const >
 template < typename R, typename T, R (T::*Func)() const >
 
     R WrapperV(const void* __restrict__ obj) {
-        const T* pp = static_cast< const T* >(obj);
+        const T* pp = reinterpret_cast< const T* >(obj);
         return (pp->*Func)();
     } 
 
@@ -522,9 +527,10 @@ struct wrapper6_t {
     
     struct base_t {
    
-    using CP = CCallback< base_t*, wrapper6_t* >; 
-       
+    using CP = CCallback< base_t*, wrapper6_t* >;      
         CP Copy;
+        func::function< void () > Destroy;
+        ~base_t() {Destroy();}
     };
     template < typename T >
     struct model_t : base_t {
@@ -535,8 +541,6 @@ struct wrapper6_t {
             Copy = CP(&WrapperC< base_t*, model_t< T >, wrapper6_t*, &model_t< T >::CopyImpl >, this);
             build_table(w);
         }
-        model_t(const model_t& t) : d(t.d) {
-        } 
         void build_table(wrapper6_t* w) {
             w->GetX = GF(&WrapperV< float, T, &T::GetX >, &d);
             w->GetY = GF(&WrapperV< float, T, &T::GetY >, &d);
@@ -546,6 +550,9 @@ struct wrapper6_t {
             w->SetY = SF(&Wrapper< float, T, float, &T::SetY >, &d);
             w->SetZ = SF(&Wrapper< float, T, float, &T::SetZ >, &d);
             w->SetW = SF(&Wrapper< float, T, float, &T::SetW >, &d);
+            Destroy = [this]() {
+                static_cast< model_t< T >& >(*this).d.T::~T();
+            };      
 
         }   
         base_t* CopyImpl(wrapper6_t* w) const { 
@@ -709,7 +716,6 @@ public:
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
     //test_Callback();
-
     for(int i = 0; i != NUM_ELEMENTS; ++i) {
         A[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
         B[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
