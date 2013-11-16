@@ -693,6 +693,16 @@ void testw6(int NUM_TESTS) {
 }
 //------------------------------------------------------------------------------
 
+template < typename R, typename T, typename... Args,  R (T::*Func)(Args...) >
+class F {
+using f_t = R (*)(void*, Args...);
+template < typename ObjT >
+R operator()(Args...args) {
+    return f_(obj_, args...);
+}
+f_t f_;   
+};
+
 
 class Foo {
 public:
