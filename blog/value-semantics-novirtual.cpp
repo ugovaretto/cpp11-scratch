@@ -243,6 +243,7 @@ struct wrapper3_t {
         virtual float SetZ( float z_ ) = 0;
         virtual float SetW( float w_ ) = 0;
         virtual base_t* Copy() const = 0;
+
         virtual ~base_t() {}
     };
     template < typename T >
@@ -423,101 +424,136 @@ struct wrapper5_t {
 //------------------------------------------------------------------------------
 //pointer to members initialized in derived class
 //------------------------------------------------------------------------------
+#define ensure_forceinline __attribute__((always_inline)) // inline or die
 template < typename R, typename P >
 struct Callback {
     typedef R (*FuncType)(void*, P);
     Callback() : func(0), obj(0) {}
     Callback(const Callback&) = default;
-    Callback(FuncType f, void* o) : func(f), obj(o) {}
+    Callback(const FuncType f, void* __restrict__ o) : func(f), obj(o) {}
     R operator()(P p) { return func(obj, p); }
-    FuncType func;
-    void* obj;
+    void operator=(const Callback& c) const {
+        FuncType& r = const_cast< FuncType& >(func);
+        r = c.func;
+        obj = c.obj; 
+    }
+    const FuncType func;
+    mutable void* __restrict__ obj;
+};
+
+template < typename R, typename P >
+struct CCallback {
+    typedef R (*FuncType)(const void*, P);
+    CCallback() : func(0), obj(0) {}
+    CCallback(const CCallback&) = default;
+    CCallback(const FuncType f, const void* __restrict__ o) : func(f), obj(o) {}
+    R operator()(P p) { return func(obj, p); }
+     void operator=(const CCallback& c) const {
+        FuncType& r = const_cast< FuncType& >(func);
+        r = c.func;
+        obj = c.obj;  
+    }
+    const FuncType func;
+    mutable const void* __restrict__ obj;
 };
 
 template < typename R >
 struct Callback<R, void> {
     typedef R (*FuncType)(const void*);
-    Callback(FuncType f, const void* o) : func(f), obj(o) {}
+    Callback(const FuncType f, const void* __restrict__ o) : func(f), obj(o) {}
     Callback(const Callback&) = default;
     R operator()() { return func(obj); }
     Callback() : func(0), obj(0) {}
-    FuncType func;
-    const void* obj;
+    const FuncType func;
+    mutable const void* __restrict__ obj;
+     void operator=(const Callback& c) const {
+        FuncType& r = const_cast< FuncType& >(func);
+        r = c.func;
+        obj = c.obj;  
+    }
 };
 
 
 template < typename R, typename T, typename P, R (T::*Func)(P) >
-struct Wrapper {
-    static R Wrap(void* obj, P p) {
-        return (static_cast< T* >(obj)->*Func)(p);
+
+    R Wrapper(void* __restrict__ obj, P p) {
+        T* pp = static_cast< T* >(obj);
+        return (pp->*Func)(p);
     } 
-};
+
+
+
+template < typename R, typename T, typename P, R (T::*Func)(P) const >
+
+    static R WrapperC(const void* __restrict__ obj, P p) {
+        const T* pp = static_cast< const T* >(obj);
+        return (pp->*Func)(p);
+    } 
+    
 
 
 template < typename R, typename T, R (T::*Func)() const >
-struct WrapperV {
-    static R Wrap(const void* obj) {
-        return (static_cast< const T* >(obj)->*Func)();
-    } 
-};
 
-// template < typename T, void (T::*Func)() const>
-// struct WrapperV< void, T, Func > {
-//     static void Wrap(const void* obj) {
-//         (static_cast< const T* >(obj)->*Func)();
-//     } 
-// };
+    R WrapperV(const void* __restrict__ obj) {
+        const T* pp = static_cast< const T* >(obj);
+        return (pp->*Func)();
+    } 
+
+
 
 struct wrapper6_t {
-    float GetX() const { return model_->GetX(); }
-    float GetY() const { return model_->GetY(); }
-    float GetZ() const { return model_->GetZ(); }
-    float GetW() const { return model_->GetW(); }
-    float SetX( float x_ ) { return model_->SetX(x_); }
-    float SetY( float y_ ) { return model_->SetY(y_); }
-    float SetZ( float z_ ) { return model_->SetZ(z_); }
-    float SetW( float w_ ) { return model_->SetW(w_); }
-    wrapper6_t() = default;
-    wrapper6_t(wrapper6_t&& ) = default;
-    wrapper6_t(const wrapper6_t& w) : model_(w.model_->Copy()) {}
-    template < typename T >
-    wrapper6_t(const T& t) : model_(new model_t< T >(t)) {}
-    template < typename T >
-    T& get() {
-        return static_cast< model_t< T >& >(*model_).d;
-    }
-    
-    struct base_t {
     using GF = Callback< float, void >;
     using SF = Callback< float, float >;
-    using CP = Callback< base_t*, void >; 
-        GF GetX;
-        GF GetY;
-        GF GetZ;
-        GF GetW;
-        SF SetX;
-        SF SetY;
-        SF SetZ;
-        SF SetW;
+    GF GetX;
+    GF GetY;
+    GF GetZ;
+    GF GetW;
+    SF SetX;
+    SF SetY;
+    SF SetZ;
+    SF SetW;
+    wrapper6_t() = default;
+    wrapper6_t(wrapper6_t&& ) = delete;
+    wrapper6_t(const wrapper6_t& w) : model_(w.model_->Copy(this)) {
+    }
+
+    template < typename T >
+    wrapper6_t(const T& t) : model_(new model_t< T >(t, this)) {}
+    
+    struct base_t {
+   
+    using CP = CCallback< base_t*, wrapper6_t* >; 
+       
         CP Copy;
     };
     template < typename T >
     struct model_t : base_t {
+        using GF = Callback< float, void >;
+        using SF = Callback< float, float >;
         T d;
-        model_t(const T& t) : d(t) {
-            GetX = GF(&WrapperV< float, T, &T::GetX >::Wrap, &d);
-            GetY = GF(&WrapperV< float, T, &T::GetY >::Wrap, &d);
-            GetZ = GF(&WrapperV< float, T, &T::GetZ >::Wrap, &d);
-            GetW = GF(&WrapperV< float, T, &T::GetW >::Wrap, &d);
-            SetX = SF(&Wrapper< float, T, float, &T::SetX >::Wrap, &d);
-            SetY = SF(&Wrapper< float, T, float, &T::SetY >::Wrap, &d);
-            SetZ = SF(&Wrapper< float, T, float, &T::SetZ >::Wrap, &d);
-            SetW = SF(&Wrapper< float, T, float, &T::SetW >::Wrap, &d);
-            Copy = CP(&WrapperV< base_t*, model_t< T >, &model_t< T >::CopyImpl >::Wrap, &d);
-        }    
+        model_t(const T& t, wrapper6_t* w) : d(t) {
+            Copy = CP(&WrapperC< base_t*, model_t< T >, wrapper6_t*, &model_t< T >::CopyImpl >, this);
+            build_table(w);
+        }
+        model_t(const model_t& t) : d(t.d) {
+        } 
+        void build_table(wrapper6_t* w) {
+            w->GetX = GF(&WrapperV< float, T, &T::GetX >, &d);
+            w->GetY = GF(&WrapperV< float, T, &T::GetY >, &d);
+            w->GetZ = GF(&WrapperV< float, T, &T::GetZ >, &d);
+            w->GetW = GF(&WrapperV< float, T, &T::GetW >, &d);
+            w->SetX = SF(&Wrapper< float, T, float, &T::SetX >, &d);
+            w->SetY = SF(&Wrapper< float, T, float, &T::SetY >, &d);
+            w->SetZ = SF(&Wrapper< float, T, float, &T::SetZ >, &d);
+            w->SetW = SF(&Wrapper< float, T, float, &T::SetW >, &d);
 
-        base_t* CopyImpl() const { return new model_t< T >(*this);}
-
+        }   
+        base_t* CopyImpl(wrapper6_t* w) const { 
+            model_t< T >* p = new model_t< T >(*this);
+            p->build_table(w);
+            return p;
+        }
+          
     };
     unique_ptr< base_t > model_;
 };
@@ -555,14 +591,15 @@ public:
     ~Vector4Test() {}
 };
 
+#define NUM_ELEMENTS 122222
 
 //------------------------------------------------------------------------------
-std::vector< shared_ptr< Vector4TestV > > A(1024),
-                                          B(1024),
-                                          C(1024);
+std::vector< shared_ptr< Vector4TestV > > A(NUM_ELEMENTS),
+                                          B(NUM_ELEMENTS),
+                                          C(NUM_ELEMENTS);
 void test(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
             C[i]->SetX(A[i]->GetX() + B[i]->GetX());
             C[i]->SetY(A[i]->GetY() + B[i]->GetY());
             C[i]->SetZ(A[i]->GetZ() + B[i]->GetZ());
@@ -570,12 +607,12 @@ void test(int NUM_TESTS) {
         }
 }
 
-std::vector< wrapper_t > Aw(1024, wrapper_t(Vector4Test())),
-                         Bw(1024, wrapper_t(Vector4Test())),  
-                         Cw(1024, wrapper_t(Vector4Test()));
+std::vector< wrapper_t > Aw(NUM_ELEMENTS, wrapper_t(Vector4Test())),
+                         Bw(NUM_ELEMENTS, wrapper_t(Vector4Test())),  
+                         Cw(NUM_ELEMENTS, wrapper_t(Vector4Test()));
 void testw(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
             Cw[i].SetX(Aw[i].GetX() + Bw[i].GetX());
             Cw[i].SetY(Aw[i].GetY() + Bw[i].GetY());
             Cw[i].SetZ(Aw[i].GetZ() + Bw[i].GetZ());
@@ -583,12 +620,12 @@ void testw(int NUM_TESTS) {
         }
 }
 
-std::vector< wrapper2_t > Aw2(1024, wrapper2_t((Vector4Test()))),
-                          Bw2(1024, wrapper2_t((Vector4Test()))),  
-                          Cw2(1024, wrapper2_t((Vector4Test())));
+std::vector< wrapper2_t > Aw2(NUM_ELEMENTS, wrapper2_t((Vector4Test()))),
+                          Bw2(NUM_ELEMENTS, wrapper2_t((Vector4Test()))),  
+                          Cw2(NUM_ELEMENTS, wrapper2_t((Vector4Test())));
 void testw2(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
             Cw2[i].SetX(Aw2[i].GetX() + Bw2[i].GetX());
             Cw2[i].SetY(Aw2[i].GetY() + Bw2[i].GetY());
             Cw2[i].SetZ(Aw2[i].GetZ() + Bw2[i].GetZ());
@@ -596,12 +633,12 @@ void testw2(int NUM_TESTS) {
         }
 }
 
-std::vector< wrapper3_t > Aw3(1024, wrapper3_t(Vector4Test())),
-                          Bw3(1024, wrapper3_t(Vector4Test())),  
-                          Cw3(1024, wrapper3_t(Vector4Test()));
+std::vector< wrapper3_t > Aw3(NUM_ELEMENTS, wrapper3_t(Vector4Test())),
+                          Bw3(NUM_ELEMENTS, wrapper3_t(Vector4Test())),  
+                          Cw3(NUM_ELEMENTS, wrapper3_t(Vector4Test()));
 void testw3(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
             Cw3[i].SetX(Aw3[i].GetX() + Bw3[i].GetX());
             Cw3[i].SetY(Aw3[i].GetY() + Bw3[i].GetY());
             Cw3[i].SetZ(Aw3[i].GetZ() + Bw3[i].GetZ());
@@ -610,12 +647,12 @@ void testw3(int NUM_TESTS) {
 }
 
 
-std::vector< wrapper4_t > Aw4(1024, wrapper4_t(Vector4Test())),
-                          Bw4(1024, wrapper4_t(Vector4Test())),  
-                          Cw4(1024, wrapper4_t(Vector4Test()));
+std::vector< wrapper4_t > Aw4(NUM_ELEMENTS, wrapper4_t(Vector4Test())),
+                          Bw4(NUM_ELEMENTS, wrapper4_t(Vector4Test())),  
+                          Cw4(NUM_ELEMENTS, wrapper4_t(Vector4Test()));
 void testw4(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
             Cw4[i].SetX(Aw4[i].GetX() + Bw4[i].GetX());
             Cw4[i].SetY(Aw4[i].GetY() + Bw4[i].GetY());
             Cw4[i].SetZ(Aw4[i].GetZ() + Bw4[i].GetZ());
@@ -623,12 +660,12 @@ void testw4(int NUM_TESTS) {
         }
 }
 
-std::vector< wrapper5_t > Aw5(1024, wrapper5_t(Vector4Test())),
-                          Bw5(1024, wrapper5_t(Vector4Test())),  
-                          Cw5(1024, wrapper5_t(Vector4Test()));
+std::vector< wrapper5_t > Aw5(NUM_ELEMENTS, wrapper5_t(Vector4Test())),
+                          Bw5(NUM_ELEMENTS, wrapper5_t(Vector4Test())),  
+                          Cw5(NUM_ELEMENTS, wrapper5_t(Vector4Test()));
 void testw5(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
             Cw5[i].SetX(Aw5[i].GetX() + Bw5[i].GetX());
             Cw5[i].SetY(Aw5[i].GetY() + Bw5[i].GetY());
             Cw5[i].SetZ(Aw5[i].GetZ() + Bw5[i].GetZ());
@@ -636,12 +673,12 @@ void testw5(int NUM_TESTS) {
         }
 }
 
-std::vector< wrapper6_t > Aw6(1024, wrapper6_t(Vector4Test())),
-                          Bw6(1024, wrapper6_t(Vector4Test())),  
-                          Cw6(1024, wrapper6_t(Vector4Test()));
+std::vector< wrapper6_t > Aw6(NUM_ELEMENTS, wrapper6_t(Vector4Test())),
+                          Bw6(NUM_ELEMENTS, wrapper6_t(Vector4Test())),  
+                          Cw6(NUM_ELEMENTS, wrapper6_t(Vector4Test()));
 void testw6(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
-        for (int i=0; i != 1024 ; ++i) {
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
             Cw6[i].SetX(Aw6[i].GetX() + Bw6[i].GetX());
             Cw6[i].SetY(Aw6[i].GetY() + Bw6[i].GetY());
             Cw6[i].SetZ(Aw6[i].GetZ() + Bw6[i].GetZ());
@@ -673,13 +710,13 @@ public:
 int main(int argc, char** argv) {
     //test_Callback();
 
-    for(int i = 0; i != 1024; ++i) {
+    for(int i = 0; i != NUM_ELEMENTS; ++i) {
         A[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
         B[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
         C[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
     }
     int numtests = argc == 1 ? 1 : stoi(argv[1]);
-    const int calls = numtests * 1024; 
+    const int calls = numtests * NUM_ELEMENTS; 
     using myclock_t = chrono::high_resolution_clock;
     using duration  = chrono::high_resolution_clock::duration;
     using timepoint = chrono::high_resolution_clock::time_point;
