@@ -1,9 +1,21 @@
 //Author: Ugo Varetto
 //Benchmark of various approaches to value semantincs with and without virtual
 //functions
-//TODO: check destroy policy: for non-virtual derived class the run-time invokes
-//the base class destructor it is therefore required that the base destructor
-//invokes the derived instance destructor
+//NOTE on destruction:
+//for non-virtual derived class the run-time invokes the base class destructor; 
+//it is therefore required that the base destructor invoke the derived 
+//instance destructor or the wrapped-data destructor directly.
+
+//SUMMARY:
+//any approach other than std::function or func::function including a base_t 
+//with virtual methods is fine
+//static function pointers are much faster than anything else when lto enabled
+//and outperform even regular non-virtual method invocations
+
+//to see the benefits of a static vtable you need link time optimization
+//clang on Apple: do use -O4 (O3 + lto)
+//gcc or clang on linux: do install the gold linker (binutils-gold)
+
 #include <cassert>
 #include <functional>
 #include <memory>
@@ -13,7 +25,7 @@
 #include <vector>
 #include <cstring>
 #include <iostream>
-#include "function.h"
+#include "function.h" 
 
 using namespace std;
 
@@ -44,49 +56,7 @@ struct wrapper_t {
         return static_cast< model_t< T >& >(*model_).d;
     }
     struct base_t {
-        template < typename T >
-        base_t(const T& t) {
-            const T* p = &static_cast< const model_t< T >* >(this)->d;
-            T* pp = &static_cast< model_t< T >* >(this)->d;
-            GetX = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetX();
-                return p->GetX();            
-            };
-            GetY = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetY(); 
-                return p->GetY();            
-            };
-            GetZ = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetZ(); 
-                return p->GetZ();            
-            };
-            GetW = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetW(); 
-                return p->GetW();            
-            };
-            SetX = [pp](float x_) {
-                //return static_cast< model_t< T >& >(*this).d.SetX(x_);   
-                return pp->SetX(x_);         
-            };
-            SetY = [pp](float y_) {
-                //return static_cast< model_t< T >& >(*this).d.SetY(y_);   
-                return pp->SetY(y_);           
-            };
-            SetZ = [pp](float z_) {
-                //return static_cast< model_t< T >& >(*this).d.SetZ(z_);
-                return pp->SetZ(z_);              
-            };
-            SetW = [pp](float w_) {
-                //return static_cast< model_t< T >& >(*this).d.SetW(w_);  
-                return pp->SetW(w_);            
-            };
-            Copy = [this]() {
-                return static_cast< const model_t< T >& >(*this).Copy();
-            };
-            Destroy = [this]() {
-                return static_cast< model_t< T >& >(*this).d.T::~T();
-            };                    
-        }
+        ~base_t() {Destroy();}
         std::function< float () > GetX;
         std::function< float () > GetY;
         std::function< float () > GetZ;
@@ -101,8 +71,46 @@ struct wrapper_t {
     template < typename T >
     struct model_t : base_t {
         T d;
-        model_t(const T& t) : base_t(t), d(t) {}    
-        base_t* Copy() const { return new model_t(*this); }
+        model_t(const T& t) : d(t) {
+            BuildVTable();
+        }    
+        model_t(const model_t& m) : d(m.d) {
+            BuildVTable();
+        }
+        void BuildVTable() {
+            const T* p = &d;
+            T* pp = &d;
+            GetX = [p]() {
+                return p->GetX();            
+            };
+            GetY = [p]() {
+                return p->GetY();            
+            };
+            GetZ = [p]() {
+                return p->GetZ();            
+            };
+            GetW = [p]() {
+                return p->GetW();            
+            };
+            SetX = [pp](float x_) {
+                return pp->SetX(x_);         
+            };
+            SetY = [pp](float y_) {
+                return pp->SetY(y_);           
+            };
+            SetZ = [pp](float z_) {
+                return pp->SetZ(z_);              
+            };
+            SetW = [pp](float w_) {
+                return pp->SetW(w_);            
+            };
+            Copy = [this]() {
+                return new model_t< T >(static_cast< model_t& >(*this));
+            };
+            Destroy = [this]() {
+                static_cast< model_t< T >& >(*this).d.T::~T();
+            };                    
+        }
     };
     unique_ptr< base_t > model_;
 };
@@ -110,6 +118,7 @@ struct wrapper_t {
 
 //------------------------------------------------------------------------------
 //static function pointers
+//fastest, with lto enabled is faster than regualar non-virtual methods!
 struct wrapper2_t {
     float GetX() const { return model_->GetX(); }
     float GetY() const { return model_->GetY(); }
@@ -132,8 +141,9 @@ struct wrapper2_t {
         using GF = float (*)(const void* );
         using SF = float (*)(void*, float);
         using CP = base_t* (*)(const void*);
+        using D  = void (*)(void*);
         struct vtable {
-             static GF GetXImpl;
+            static GF GetXImpl;
             static GF GetYImpl;
             static GF GetZImpl;
             static GF GetWImpl;
@@ -145,9 +155,9 @@ struct wrapper2_t {
         };
         template < typename T >
         base_t(const T& ) {
-            BuildVTable< T >();
-           
+            BuildVTable< T >();         
         }
+        ~base_t() {Destroy();}
         template < typename T >
         void BuildVTable() {
             if(!vtable::GetXImpl) {
@@ -182,6 +192,9 @@ struct wrapper2_t {
             CopyImpl = (CP)([](const void* self) {
                 return reinterpret_cast< const model_t< T >* >(self)->Copy();
             });
+            DestroyImpl = (D)([](void* self) {
+                reinterpret_cast< model_t< T >* >(self)->d.T::~T();
+            });
             }
         }
         float GetX() const { return vtable::GetXImpl(this); }
@@ -192,9 +205,11 @@ struct wrapper2_t {
         float SetY(float y_) { return vtable::SetYImpl(this, y_); }
         float SetZ(float z_) { return vtable::SetZImpl(this, z_); }
         float SetW(float w_) { return vtable::SetWImpl(this, w_); }
-        base_t* Copy() const { return CopyImpl(this); }       
+        base_t* Copy() const { return CopyImpl(this); }
+        void Destroy() { DestroyImpl(this); }       
         
         static CP CopyImpl;
+        static D DestroyImpl;
     };
     template < typename T >
     struct model_t : base_t {
@@ -207,6 +222,7 @@ struct wrapper2_t {
 using GF = float (*)(const void* );
 using SF = float (*)(void*, float);
 using CP = wrapper2_t::base_t* (*)(const void*);
+using D  = void (*)(void*);
 GF wrapper2_t::base_t::vtable::GetXImpl = nullptr;
 GF wrapper2_t::base_t::vtable::GetYImpl = nullptr;
 GF wrapper2_t::base_t::vtable::GetZImpl = nullptr;
@@ -215,7 +231,8 @@ SF wrapper2_t::base_t::vtable::SetXImpl = nullptr;
 SF wrapper2_t::base_t::vtable::SetYImpl = nullptr;
 SF wrapper2_t::base_t::vtable::SetZImpl = nullptr;
 SF wrapper2_t::base_t::vtable::SetWImpl = nullptr;
-CP wrapper2_t::base_t::CopyImpl = nullptr;
+CP wrapper2_t::base_t::CopyImpl         = nullptr;
+D  wrapper2_t::base_t::DestroyImpl      = nullptr;
 
 //------------------------------------------------------------------------------
 //virtual
@@ -270,7 +287,8 @@ struct wrapper3_t {
 
 
 //------------------------------------------------------------------------------
-//alternate std::function implementation
+//alternative std::function implementation >50% faster than std::function
+//Developed by Malte Skarupke
 struct wrapper4_t {
     float GetX() const { return model_->GetX(); }
     float GetY() const { return model_->GetY(); }
@@ -290,49 +308,7 @@ struct wrapper4_t {
         return static_cast< model_t< T >& >(*model_).d;
     }
     struct base_t {
-        template < typename T >
-        base_t(const T& t) {
-            const T* p = &static_cast< const model_t< T >* >(this)->d;
-            T* pp = &static_cast< model_t< T >* >(this)->d;
-            GetX = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetX();
-                return p->GetX();            
-            };
-            GetY = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetY(); 
-                return p->GetY();            
-            };
-            GetZ = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetZ(); 
-                return p->GetZ();            
-            };
-            GetW = [p]() {
-                //return static_cast< const model_t< T >& >(*this).d.GetW(); 
-                return p->GetW();            
-            };
-            SetX = [pp](float x_) {
-                //return static_cast< model_t< T >& >(*this).d.SetX(x_);   
-                return pp->SetX(x_);         
-            };
-            SetY = [pp](float y_) {
-                //return static_cast< model_t< T >& >(*this).d.SetY(y_);   
-                return pp->SetY(y_);           
-            };
-            SetZ = [pp](float z_) {
-                //return static_cast< model_t< T >& >(*this).d.SetZ(z_);
-                return pp->SetZ(z_);              
-            };
-            SetW = [pp](float w_) {
-                //return static_cast< model_t< T >& >(*this).d.SetW(w_);  
-                return pp->SetW(w_);            
-            };
-            Copy = [this]() {
-                return static_cast< const model_t< T >& >(*this).Copy();
-            };
-            Destroy = [this]() {
-                static_cast< model_t< T >& >(*this).d.T::~T();
-            };                    
-        }
+        ~base_t() {Destroy();}
         func::function< float () > GetX;
         func::function< float () > GetY;
         func::function< float () > GetZ;
@@ -347,8 +323,46 @@ struct wrapper4_t {
     template < typename T >
     struct model_t : base_t {
         T d;
-        model_t(const T& t) : base_t(t), d(t) {}    
-        base_t* Copy() const { return new model_t(*this); }
+        model_t(const T& t) : d(t) {
+            BuildVTable();
+        }    
+        model_t(const model_t& m) : d(m.d) {
+            BuildVTable();
+        }
+        void BuildVTable() {
+            const T* p = &d;
+            T* pp = &d;
+            GetX = [p]() {
+                return p->GetX();            
+            };
+            GetY = [p]() {
+                return p->GetY();            
+            };
+            GetZ = [p]() {
+                return p->GetZ();            
+            };
+            GetW = [p]() {
+                return p->GetW();            
+            };
+            SetX = [pp](float x_) {
+                return pp->SetX(x_);         
+            };
+            SetY = [pp](float y_) {
+                return pp->SetY(y_);           
+            };
+            SetZ = [pp](float z_) {
+                return pp->SetZ(z_);              
+            };
+            SetW = [pp](float w_) {
+                return pp->SetW(w_);            
+            };
+            Copy = [this]() {
+                return new model_t< T >(static_cast< model_t& >(*this));
+            };
+            Destroy = [this]() {
+                static_cast< model_t< T >& >(*this).d.T::~T();
+            };                    
+        }
     };
     unique_ptr< base_t > model_;
 };
@@ -386,6 +400,7 @@ struct wrapper5_t {
         using GF = float (base_t::*)() const;
         using SF = float (base_t::*)(float);
         using CP = base_t* (base_t::*)() const; 
+        //using D = void (base_t::*)();
         GF GetXImpl;
         GF GetYImpl;
         GF GetZImpl;
@@ -395,7 +410,14 @@ struct wrapper5_t {
         SF SetZImpl;
         SF SetWImpl;
         CP CopyImpl;
-        ~base_t() {}
+        void (base_t::*DestroyImpl)();
+        ~base_t() { 
+            if(!destroyed) {
+                (this->*DestroyImpl)(); 
+                destroyed = true;
+            }
+        }
+        bool destroyed = false;
     };
     template < typename T >
     struct model_t : base_t {
@@ -410,6 +432,7 @@ struct wrapper5_t {
             SetZImpl = (SF) &model_t< T >::SetZ;
             SetWImpl = (SF) &model_t< T >::SetW;
             CopyImpl = (CP) &model_t< T >::Copy;
+            DestroyImpl = (void (base_t::*)()) &model_t< T >::Destroy;
         }    
         float GetX() const { return d.GetX(); }
         float GetY() const { return d.GetY(); }
@@ -420,15 +443,17 @@ struct wrapper5_t {
         float SetZ( float z_ ) { return d.SetZ(z_); }
         float SetW( float w_ ) { return d.SetW(w_); }
         base_t* Copy() const { return new model_t< T >(*this);}
+        ~model_t() = default;
+        void Destroy() { d.T::~T(); }
 
     };
     unique_ptr< base_t > model_;
 };
 
 //------------------------------------------------------------------------------
-//pointer to members initialized in derived class
-//------------------------------------------------------------------------------
-#define ensure_forceinline __attribute__((always_inline)) // inline or die
+//Callbacks, similar to 
+//http://www.codeproject.com/Articles/136799/Lightweight-Generic-C-Callbacks-or-Yet-Another-Del
+//not worth, approach is not faster than the other techniques not based 
 template < typename R, typename P >
 struct Callback {
     typedef R (*FuncType)(void*, P);
@@ -504,7 +529,6 @@ template < typename R, typename T, R (T::*Func)() const >
     } 
 
 
-
 struct wrapper6_t {
     using GF = Callback< float, void >;
     using SF = Callback< float, float >;
@@ -525,9 +549,7 @@ struct wrapper6_t {
     wrapper6_t(const T& t) : model_(new model_t< T >(t, this)) {}
     
     struct base_t {
-   
-    using CP = CCallback< base_t*, wrapper6_t* >;      
-        CP Copy;
+        mutable func::function< base_t* (wrapper6_t*) > Copy;
         func::function< void () > Destroy;
         ~base_t() {Destroy();}
     };
@@ -537,9 +559,18 @@ struct wrapper6_t {
         using SF = Callback< float, float >;
         T d;
         model_t(const T& t, wrapper6_t* w) : d(t) {
-            Copy = CP(&WrapperC< base_t*, model_t< T >, wrapper6_t*, &model_t< T >::CopyImpl >, this);
+            Copy = [this](wrapper6_t* w) {
+                return new model_t< T >(static_cast< const model_t< T >& >(*this), w);
+            };       
             build_table(w);
         }
+        model_t(const model_t& m, wrapper6_t* w) : d(m.d) {
+            Copy = [this](wrapper6_t* w) {
+                return new model_t< T >(static_cast< const model_t< T >& >(*this), w);
+            };  
+            build_table(w);  
+        }
+        model_t(const model_t&) = delete;
         void build_table(wrapper6_t* w) {
             w->GetX = GF(&WrapperV< float, T, &T::GetX >, &d);
             w->GetY = GF(&WrapperV< float, T, &T::GetY >, &d);
@@ -551,14 +582,9 @@ struct wrapper6_t {
             w->SetW = SF(&Wrapper< float, T, float, &T::SetW >, &d);
             Destroy = [this]() {
                 static_cast< model_t< T >& >(*this).d.T::~T();
-            };      
-
-        }   
-        base_t* CopyImpl(wrapper6_t* w) const { 
-            model_t< T >* p = new model_t< T >(*this);
-            p->build_table(w);
-            return p;
-        }
+            };
+            
+        } 
           
     };
     unique_ptr< base_t > model_;
@@ -597,7 +623,9 @@ public:
     ~Vector4Test() {}
 };
 
-#define NUM_ELEMENTS 122222
+//difference between cache-friendly and non-cache friendly values: static
+//pointers wtih lto optimizaiton (almost) not affected!
+static const int NUM_ELEMENTS = 1024;//122222;
 
 //------------------------------------------------------------------------------
 std::vector< shared_ptr< Vector4TestV > > A(NUM_ELEMENTS),
@@ -691,41 +719,9 @@ void testw6(int NUM_TESTS) {
             Cw6[i].SetW(Aw6[i].GetW() + Bw6[i].GetW());
         }
 }
-//------------------------------------------------------------------------------
-
-// template < typename R, typename T, typename... Args/*,  R (T::*Func)(Args...)*/ >
-// class F {
-// using f_t = R (*)(void*, Args...);
-// template < typename ObjT >
-// R operator()(Args...args) {
-//     return f_(obj_, args...);
-// }
-// f_t f_;
-// void* obj_;   
-// };
-
-
-class Foo {
-public:
-    Foo() {}
-    float ConstMemberFunction()  { return 1.0f; }
-    float MemberFunction(float x) { return x; }
-};
-
-// void test_Callback() {
-//     Foo f;
-//     Callback< float, float > c1(
-//         &Wrapper< float, Foo, float, &Foo::MemberFunction>::Wrap, &f);
-    
-//     Callback< float, void > c2
-//         (&WrapperV< float, Foo, &Foo::ConstMemberFunction>::Wrap, &f);
-//     std::cout << c1(2.0f) << ' ' << c2() << endl;
-//     cout << c1(3) << endl;
-// }
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
-    //test_Callback();
     for(int i = 0; i != NUM_ELEMENTS; ++i) {
         A[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
         B[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
@@ -751,49 +747,49 @@ int main(int argc, char** argv) {
 #else
     cout << "Reference (virtual):             "
 #endif     
-         << (chrono::nanoseconds(d).count()) / calls << endl;
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "std::function:                   "
-         << (chrono::nanoseconds(d).count()) / calls << endl;
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw2(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Function pointers:               "
-         << double(chrono::nanoseconds(d).count()) / calls << endl;
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw3(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Virtual:                         "
-         << (chrono::nanoseconds(d).count()) / calls << endl;
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw4(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Alternative to std::function:    "
-         << (chrono::nanoseconds(d).count()) / calls << endl;
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw5(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Pointer to members:              "
-         << (chrono::nanoseconds(d).count()) / calls << endl;
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw6(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "XXXXXXXXXXXXXXXXXXX:             "
-         << (chrono::nanoseconds(d).count()) / calls << endl;     
+    cout << "Callbacks:                       "
+         << float(chrono::nanoseconds(d).count()) / calls << endl;     
 
     return 0;
 }
