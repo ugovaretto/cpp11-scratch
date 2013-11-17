@@ -693,15 +693,16 @@ void testw6(int NUM_TESTS) {
 }
 //------------------------------------------------------------------------------
 
-template < typename R, typename T, typename... Args,  R (T::*Func)(Args...) >
-class F {
-using f_t = R (*)(void*, Args...);
-template < typename ObjT >
-R operator()(Args...args) {
-    return f_(obj_, args...);
-}
-f_t f_;   
-};
+// template < typename R, typename T, typename... Args/*,  R (T::*Func)(Args...)*/ >
+// class F {
+// using f_t = R (*)(void*, Args...);
+// template < typename ObjT >
+// R operator()(Args...args) {
+//     return f_(obj_, args...);
+// }
+// f_t f_;
+// void* obj_;   
+// };
 
 
 class Foo {
@@ -731,7 +732,8 @@ int main(int argc, char** argv) {
         C[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
     }
     int numtests = argc == 1 ? 1 : stoi(argv[1]);
-    const int calls = numtests * NUM_ELEMENTS; 
+    const int calls_per_iteration = 12;
+    const int calls = numtests * NUM_ELEMENTS * calls_per_iteration;
     using myclock_t = chrono::high_resolution_clock;
     using duration  = chrono::high_resolution_clock::duration;
     using timepoint = chrono::high_resolution_clock::time_point;
@@ -763,7 +765,7 @@ int main(int argc, char** argv) {
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Function pointers:               "
-         << (chrono::nanoseconds(d).count()) / calls << endl;
+         << double(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
     testw3(numtests);
@@ -790,7 +792,7 @@ int main(int argc, char** argv) {
     testw6(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "XXXXXXXXXXXXXXXXXXX:              "
+    cout << "XXXXXXXXXXXXXXXXXXX:             "
          << (chrono::nanoseconds(d).count()) / calls << endl;     
 
     return 0;
