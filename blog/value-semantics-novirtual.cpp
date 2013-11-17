@@ -11,6 +11,8 @@
 //with virtual methods is fine
 //static function pointers are much faster than anything else when lto enabled
 //and outperform even regular non-virtual method invocations
+//if instead of static function pointers, non-static pointers are used the
+//performance is equal to virtual methods under -O3 optimizations
 
 //to see the benefits of a static vtable you need link time optimization
 //clang on Apple: do use -O4 (O3 + lto)
