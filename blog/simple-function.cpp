@@ -1,43 +1,83 @@
 #include <cassert>
+#include <iostream>
+//==============================================================================
+//generic
+template < typename > struct Fun {};
 
+template < typename R, typename...ArgTypes >
+struct Fun< R (ArgTypes...) > {
+    Fun(R (*f)(ArgTypes...));
+    template < typename T > Fun(R (T::*f)(ArgTypes...) );
+    template < typename T > Fun(R (T::*f)(ArgTypes...) const);
 
-template < typename R, typename T, typename A, R (T::*M)(A) >
-R Wrapper(void* obj, A a) {
-    return (static_cast< T* >(obj)->*M)(a);
-}
-
-
-template < typename R, typename A >
-struct Fun {
-    Fun( R (*f)(A) ) : f_(f) {}
-    template < typename T >
-    Fun( R (T::*F)(A)  ) : f_(&Wrapper<R, T, A, F>) {}
-    R (*f_)(A);
-    R operator()(A a) { return f_(a); }
-    template < typename T >
-    R operator()(T& c, A a) {
-        return f_(&c, a);
-    }
+    R (*f_)(ArgTypes...);  
 };
 
+//non-void return type
+template < typename R, typename...ArgTypes >
+Fun< R (ArgTypes...) >::Fun(R (*f)(ArgTypes...)) { 
+    std::cout << "R (*f)(ArgTypes...)" << std::endl;
+}
+
+template < typename R, typename...ArgTypes >
+template < typename T >
+Fun< R(ArgTypes...) >::Fun(R (T::*f) (ArgTypes...) ) {
+    std::cout << "R (T::*f)(ArgTypes...)" << std::endl;
+}
+
+template < typename R, typename...ArgTypes >
+template < typename T >
+Fun< R(ArgTypes...) >::Fun(R (T::*f) (ArgTypes...) const) {
+    std::cout << "R (T::*f)(ArgTypes...) const" << std::endl;
+}
+
+//void return type
+template < typename...ArgTypes >
+struct Fun< void (ArgTypes...) > {
+    Fun(void (*f)(ArgTypes...));
+    template < typename T > Fun(void (T::*f)(ArgTypes...) );
+    template < typename T > Fun(void (T::*f)(ArgTypes...) const);
+
+    void (*f_)(ArgTypes...);  
+};
+
+template < typename...ArgTypes >
+Fun< void (ArgTypes...) >::Fun(void (*f)(ArgTypes...)) { 
+    std::cout << "void (*f)(ArgTypes...)" << std::endl;
+}
+
+template < typename...ArgTypes >
+template < typename T >
+Fun< void(ArgTypes...) >::Fun(void (T::*f) (ArgTypes...) ) {
+    std::cout << "void (T::*f)(ArgTypes...)" << std::endl;
+}
+
+template < typename...ArgTypes >
+template < typename T >
+Fun< void (ArgTypes...) >::Fun(void (T::*f) (ArgTypes...) const) {
+    std::cout << "void (T::*f)(ArgTypes...) const" << std::endl;
+}
 
 
 //------------------------------------------------------------------------------
 int Twice(int i) { return 2 * i; }
 
+int VoidParam() { return 2; }
+
 struct Class {
     int Twice(int i) { return 2 * i; }
+    int VoidParam() { return 2; }
+    int VoidParamConst() const { return 2; }
+    void Void() {}
 };
 
 void test1 () {
-    Fun< int, int > f(&Twice);
-    assert(f(3) == 6);
-    Fun < int, int > m
-    (&Class::Twice);
-    Class c;
-    assert(m(c, 2) == 4);
-    //Fun< int(int) > l = [](int i) { return 2 * i; } 
-    //assert(l(10) == 20);
+    Fun< int (int) > fun1(&Twice);  
+    Fun< int (int) > fun2(&Class::Twice);
+    Fun< int (   ) > fun3(&VoidParam);
+    Fun< int (   ) > fun4(&Class::VoidParam);
+    Fun< int (   ) > fun5(&Class::VoidParamConst);
+    Fun< void(   ) > fun6(&Class::Void);
 }
 
 //------------------------------------------------------------------------------
