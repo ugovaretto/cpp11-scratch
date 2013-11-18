@@ -461,7 +461,7 @@ struct Callback {
     typedef R (*FuncType)(void*, P);
     Callback() : func(0), obj(0) {}
     Callback(const Callback&) = default;
-    Callback(const FuncType f, void* __restrict__ o) : func(f), obj(o) {}
+    Callback(const FuncType f, void*  o) : func(f), obj(o) {}
     R operator()(P p) { return func(obj, p); }
     void operator=(const Callback& c) const {
         FuncType& r = const_cast< FuncType& >(func);
@@ -469,7 +469,7 @@ struct Callback {
         obj = c.obj; 
     }
     const FuncType func;
-    mutable void* __restrict__ obj;
+    mutable void*  obj;
 };
 
 template < typename R, typename P >
@@ -477,7 +477,7 @@ struct CCallback {
     typedef R (*FuncType)(const void*, P);
     CCallback() : func(0), obj(0) {}
     CCallback(const CCallback&) = default;
-    CCallback(const FuncType f, const void* __restrict__ o) : func(f), obj(o) {}
+    CCallback(const FuncType f, const void*  o) : func(f), obj(o) {}
     R operator()(P p) { return func(obj, p); }
      void operator=(const CCallback& c) const {
         FuncType& r = const_cast< FuncType& >(func);
@@ -485,18 +485,18 @@ struct CCallback {
         obj = c.obj;  
     }
     const FuncType func;
-    mutable const void* __restrict__ obj;
+    mutable const void*  obj;
 };
 
 template < typename R >
 struct Callback<R, void> {
     typedef R (*FuncType)(const void*);
-    Callback(const FuncType f, const void* __restrict__ o) : func(f), obj(o) {}
+    Callback(const FuncType f, const void*  o) : func(f), obj(o) {}
     Callback(const Callback&) = default;
     R operator()() { return func(obj); }
     Callback() : func(0), obj(0) {}
     const FuncType func;
-    mutable const void* __restrict__ obj;
+    mutable const void*  obj;
      void operator=(const Callback& c) const {
         FuncType& r = const_cast< FuncType& >(func);
         r = c.func;
@@ -507,7 +507,7 @@ struct Callback<R, void> {
 
 template < typename R, typename T, typename P, R (T::*Func)(P) >
 
-    R Wrapper(void* __restrict__ obj, P p) {
+    R Wrapper(void*  obj, P p) {
         T* pp = reinterpret_cast< T* >(obj);
         return (pp->*Func)(p);
     } 
@@ -516,7 +516,7 @@ template < typename R, typename T, typename P, R (T::*Func)(P) >
 
 template < typename R, typename T, typename P, R (T::*Func)(P) const >
 
-    static R WrapperC(const void* __restrict__ obj, P p) {
+    static R WrapperC(const void*  obj, P p) {
         const T* pp = reinterpret_cast< const T* >(obj);
         return (pp->*Func)(p);
     } 
@@ -525,7 +525,7 @@ template < typename R, typename T, typename P, R (T::*Func)(P) const >
 
 template < typename R, typename T, R (T::*Func)() const >
 
-    R WrapperV(const void* __restrict__ obj) {
+    R WrapperV(const void*  obj) {
         const T* pp = reinterpret_cast< const T* >(obj);
         return (pp->*Func)();
     } 
