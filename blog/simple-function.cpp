@@ -31,7 +31,9 @@ Fun< int(int) > RetFun() {
 void test1 () {
     struct V {
         float x = 1.0f;
-    } v;
+        float GetX() const { return x; } 
+        V() {}
+    } const v;
     Class c;
     const Class cc;
     Fun< int (int) >   fun0;
@@ -45,7 +47,9 @@ void test1 () {
     auto               fun8(RetFun());
     Fun< float (int, int) > fun9([=](int i, int j) {return float(i/j);});
     Fun< float (int, int) > fun10(fun9);
-    Fun< float () > fun11([v](){return v.x;});
+    Fun< float () > fun11([v](){return v.GetX();});
+    Fun< void() > vd;
+
     try { 
          fun0(9); //must throw
          assert(false);

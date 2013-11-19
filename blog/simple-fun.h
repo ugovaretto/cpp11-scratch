@@ -122,9 +122,9 @@ FunBase< R (ArgTypes...) >::FunBase(const F& f) {
     buf_.resize(sizeof(f));
     new (&buf_[0]) F(f);
     using FF = R (*)(FunBase*, ArgTypes...);
-    m_.obj_ = (FF) ([](FunBase* f, ArgTypes...args) {
-        return reinterpret_cast< F* >(&f->buf_[0])
-                                ->operator()(std::forward< ArgTypes >(args)...);
+    m_.obj_ = (FF) ([](FunBase* fb, ArgTypes...args) {
+        return R((reinterpret_cast< F* >(&fb->buf_[0]))
+                                ->operator()(std::forward< ArgTypes >(args)...));
     });
     Destruct = [](FunBase* f) {
         F* fun = reinterpret_cast< F* >(&f->buf_[0]);
