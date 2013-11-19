@@ -6,6 +6,9 @@
 //an std::vector for functor storage or a static char array
 //generic, need this to be able to declare Fun< int(int) > instead of
 //Fun< int, int >
+//TODO: add swap and bool conversion to check if object is bound to a
+//callable entity or not
+
 template < typename > struct Fun {};
 
 template < typename > struct FunBase {};
