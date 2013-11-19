@@ -1,6 +1,5 @@
 //Author; Ugo Varetto
 //simple implementation of std::function-like class using lambdas and unions
-//TODO: assignment operator
 
 #include <cassert>
 #include <iostream>
@@ -13,15 +12,16 @@ template < typename > struct Fun {};
 
 template < typename > struct FunBase {};
 
-
-
-
 template < typename R, typename...ArgTypes >
 struct FunBase< R (ArgTypes...) > {
     struct Object {}; //generic object type used to cast member methods
     //constructors
-    FunBase() {}
-    FunBase(const FunBase& fun) : f_(fun.f_), m_(fun.m_) {
+    FunBase() : Destruct(nullptr), CopyObj(nullptr) {}
+    FunBase(const FunBase& fun) 
+        : f_(fun.f_),
+          m_(fun.m_),
+          CopyObj(fun.CopyObj),
+          Destruct(fun.Destruct) {
         CopyObj(fun, *this);
     }
     FunBase(R (*f)(ArgTypes...));
@@ -29,11 +29,19 @@ struct FunBase< R (ArgTypes...) > {
     template < typename T > FunBase(R (T::*f)(ArgTypes...) const);
     template < typename T > FunBase(const T& f);
     FunBase(FunBase&&) = default;
-    FunBase& operator=(FunBase f) {
-        Destruct(this);
+    //problem: cannot use the standard C++11 idiom
+    //operator=(FunBase f) then move because operator= is invoked
+    //from derived class passing an instance of Fun which is then
+    //used to construct an instance of FunBase through the 
+    //template < typename T > FunBase(const T& f) constructor
+    FunBase& operator=(const FunBase& f) {
+        if(&f == this) return *this;
+        if(Destruct) Destruct(this);
         f_ = f.f_;
         m_ = f.m_;
-        buf_ = std::move(f.buf_);
+        CopyObj = f.CopyObj;
+        Destruct = f.Destruct;
+        buf_ = f.buf_;
         return *this;
     }
      //delegate functions
@@ -58,7 +66,7 @@ struct FunBase< R (ArgTypes...) > {
     //or use a custom data type
     std::vector< char > buf_;
     ~FunBase() {
-        Destruct(this);
+        if(Destruct) Destruct(this);
      }
 };
 
@@ -126,7 +134,7 @@ FunBase< R (ArgTypes...) >::FunBase(const F& f) {
     };
     CopyObj  = [](const FunBase& src, FunBase& target) {
         target.buf_.resize(src.buf_.size());
-        new (&target.buf_[0]) FunBase(src);
+        new (&target.buf_[0]) F(*reinterpret_cast< const F* >(src.buf_[0]));
     };
 }
 
@@ -138,14 +146,19 @@ struct Fun< R (ArgTypes...) > : FunBase< R (ArgTypes...) > {
         throw std::logic_error("EMPTY FUNCTION OBJECT");
         return R();
     }){}
-    Fun(const Fun& f) : Base(f) {}
-    Fun(Fun&& f) :  Base(f) {} 
+    //without the cast the wrong (templated) constructor is invoked
+    //and f is interpreted as a generic function object
+    Fun(const Fun& f) : Base(static_cast< const Base& >(f)) {}
+    Fun(Fun&& f) :  Base(std::forward< Base >(f)) {} 
     Fun(R (*f)(ArgTypes...)) :  Base(f) {}
     template < typename T > Fun(R (T::*f)(ArgTypes...) ) : Base(f) {}
     template < typename T > Fun(R (T::*f)(ArgTypes...) const) : Base(f) {}
     template < typename T > Fun(const T& f) : Base(f) {}
-    Fun& operator=(Fun f) {
-        Base::operator=(f);
+    Fun& operator=(const Fun& f) {
+        //need to explicitly invoke the base operator with proper type
+        //if not the base class interprets Fun as a generic functor type
+        //and tries to construct a temporary FunBase object with it
+        Base::operator=(static_cast< const Base& >(f));
         return *this;
     }    
     //operator()
@@ -178,14 +191,19 @@ struct Fun< void (ArgTypes...) > : FunBase< void (ArgTypes...) > {
     Fun() : Base([](ArgTypes...) { 
         throw std::logic_error("EMPTY FUNCTION OBJECT");
     }){}
-    Fun(const Fun& f) : Base(f) {}
-    Fun(Fun&& f) :  Base(f) {} 
+    //without the cast the wrong (templated) constructor is invoked
+    //and f is interpreted as a generic function object
+    Fun(const Fun& f) : Base(static_cast< const Base& >(f)) {}
+    Fun(Fun&& f) :  Base(std::forward< Base >(f)) {}
     Fun(void (*f)(ArgTypes...)) :  Base(f) {}
     template < typename T > Fun(void (T::*f)(ArgTypes...) ) : Base(f) {}
     template < typename T > Fun(void (T::*f)(ArgTypes...) const) : Base(f) {}
     template < typename T > Fun(const T& f) : Base(f) {}
-    Fun& operator=(Fun f) {
-        Base::operator=(f);
+    Fun& operator=(const Fun& f) {
+        //need to explicitly invoke the base operator with proper type
+        //if not the base class interprets Fun as a generic functor type
+        //and tries to construct a temporary FunBase object with it
+        Base::operator=(static_cast< const Base& >(f));
         return *this;
     }    
     //operator()
@@ -246,18 +264,21 @@ void test1 () {
     Fun< void(int&) >  fun6(&Class::Void);
     Fun< int (int) >   fun7((Functor()));
     auto               fun8(RetFun());
-
+    Fun< float (int, int) > fun9([=](int i, int j) {return float(i/j);});
+    Fun< float (int, int) > fun10(fun9);
     try { 
-        fun0(9); //must throw
-        assert(false); 
+         fun0(9); //must throw
+         assert(false); 
     } catch(...) {}
-    //fun0 = fun2;
-    //assert(fun0(2)    == fun1(2));
+    fun0 = fun1;
+    assert(fun0(2)    == fun1(2));
     assert(fun1(2)    ==  4);
     assert(fun2(c, 3) ==  6);
     assert(fun5(cc)   ==  2);
     assert(fun7(6)    == 18);
     assert(fun8(7)    == 21);
+    assert(fun9(10,4) == float(10/4));
+    assert(fun10(20, 8) == fun9(20, 8));
     //void return type
     int i = 0;
     fun6(c, i);
