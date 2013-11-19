@@ -1,5 +1,5 @@
 //Author: Ugo Varetto
-//Benchmark of various approaches to value semantincs with and without virtual
+//Benchmark of various approaches to value semantics with and without virtual
 //functions
 //NOTE on destruction:
 //for non-virtual derived class the run-time invokes the base class destructor; 
@@ -9,14 +9,15 @@
 //SUMMARY:
 //any approach other than std::function or func::function including a base_t 
 //with virtual methods is fine
-//static function pointers are much faster than anything else when lto enabled
+//static vtables are much faster than anything else when lto enabled
 //and outperform even regular non-virtual method invocations
 //if instead of static function pointers, non-static pointers are used the
 //performance is equal to virtual methods under -O3 optimizations
 
 //to see the benefits of a static vtable you need link time optimization
-//clang on Apple: do use -O4 (O3 + lto)
-//gcc or clang on linux: do install the gold linker (binutils-gold)
+//clang on Apple: do use -O3 + lto
+//gcc or clang on linux: do install the gold linker (binutils-gold) then
+//rebuild gcc or clang with lto enabled
 
 #include <cassert>
 #include <functional>
@@ -506,29 +507,26 @@ struct Callback<R, void> {
 
 
 template < typename R, typename T, typename P, R (T::*Func)(P) >
-
-    R Wrapper(void*  obj, P p) {
-        T* pp = reinterpret_cast< T* >(obj);
-        return (pp->*Func)(p);
-    } 
+R Wrapper(void*  obj, P p) {
+    T* pp = reinterpret_cast< T* >(obj);
+    return (pp->*Func)(p);
+} 
 
 
 
 template < typename R, typename T, typename P, R (T::*Func)(P) const >
-
-    static R WrapperC(const void*  obj, P p) {
-        const T* pp = reinterpret_cast< const T* >(obj);
-        return (pp->*Func)(p);
-    } 
+static R WrapperC(const void*  obj, P p) {
+    const T* pp = reinterpret_cast< const T* >(obj);
+    return (pp->*Func)(p);
+} 
     
 
 
 template < typename R, typename T, R (T::*Func)() const >
-
-    R WrapperV(const void*  obj) {
-        const T* pp = reinterpret_cast< const T* >(obj);
-        return (pp->*Func)();
-    } 
+R WrapperV(const void*  obj) {
+    const T* pp = reinterpret_cast< const T* >(obj);
+    return (pp->*Func)();
+} 
 
 
 struct wrapper6_t {
@@ -562,13 +560,15 @@ struct wrapper6_t {
         T d;
         model_t(const T& t, wrapper6_t* w) : d(t) {
             Copy = [this](wrapper6_t* w) {
-                return new model_t< T >(static_cast< const model_t< T >& >(*this), w);
+                return new model_t< T >
+                    (static_cast< const model_t< T >& >(*this), w);
             };       
             build_table(w);
         }
         model_t(const model_t& m, wrapper6_t* w) : d(m.d) {
             Copy = [this](wrapper6_t* w) {
-                return new model_t< T >(static_cast< const model_t< T >& >(*this), w);
+                return new model_t< T >
+                    (static_cast< const model_t< T >& >(*this), w);
             };  
             build_table(w);  
         }
