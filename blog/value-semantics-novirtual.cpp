@@ -288,7 +288,7 @@ struct wrapper3_t {
     unique_ptr< base_t > model_;
 };
 
-
+#include "simple-fun.h"
 //------------------------------------------------------------------------------
 //alternative std::function implementation >50% faster than std::function
 //Developed by Malte Skarupke
@@ -312,16 +312,16 @@ struct wrapper4_t {
     }
     struct base_t {
         ~base_t() {Destroy();}
-        func::function< float () > GetX;
-        func::function< float () > GetY;
-        func::function< float () > GetZ;
-        func::function< float () > GetW;
-        func::function< float (float) > SetX;
-        func::function< float (float) > SetY;
-        func::function< float (float) > SetZ;
-        func::function< float (float) > SetW;
-        func::function< base_t* () > Copy;
-        func::function< void () > Destroy;
+        Fun< float () > GetX;
+        Fun< float () > GetY;
+        Fun< float () > GetZ;
+        Fun< float () > GetW;
+        Fun< float (float) > SetX;
+        Fun< float (float) > SetY;
+        Fun< float (float) > SetZ;
+        Fun< float (float) > SetW;
+        Fun< base_t* () > Copy;
+        Fun< void () > Destroy;
     };
     template < typename T >
     struct model_t : base_t {
