@@ -13,10 +13,12 @@ template < typename > struct Fun {};
 template < typename > struct FunBase {};
 
 template < typename R, typename...ArgTypes >
-struct FunBase< R (ArgTypes...) > {
+class FunBase< R (ArgTypes...) > {
+//make everything only accessible to derived type  
+protected:    
     struct Object {}; //generic object type used to cast member methods
     //constructors
-    FunBase() : Destruct(nullptr), CopyObj(nullptr) {}
+    FunBase() {}
     FunBase(const FunBase& fun) 
         : f_(fun.f_),
           m_(fun.m_),
@@ -64,7 +66,7 @@ struct FunBase< R (ArgTypes...) > {
     //storage for functor objects, in a real-world scenario we would need to
     //either pass a custom allocator using e.g. stack memory for small objects
     //or use a custom data type
-    std::vector< char > buf_;
+    std::vector< char > buf_; 
     ~FunBase() {
         if(Destruct) Destruct(this);
      }
@@ -140,7 +142,8 @@ FunBase< R (ArgTypes...) >::FunBase(const F& f) {
 
 //callable entities with a return type
 template < typename R, typename...ArgTypes >
-struct Fun< R (ArgTypes...) > : FunBase< R (ArgTypes...) > {
+class Fun< R (ArgTypes...) > : FunBase< R (ArgTypes...) > {
+public:    
     using Base = FunBase< R(ArgTypes...) >;
     Fun() : Base([](ArgTypes...) { 
         throw std::logic_error("EMPTY FUNCTION OBJECT");
@@ -186,7 +189,8 @@ R Fun< R (ArgTypes...) >::operator()(const T& obj, ArgTypes...args) const {
 
 //callable entities with void return type
 template < typename...ArgTypes >
-struct Fun< void (ArgTypes...) > : FunBase< void (ArgTypes...) > {
+class Fun< void (ArgTypes...) > : FunBase< void (ArgTypes...) > {
+public:    
     using Base = FunBase< void (ArgTypes...) >;
     Fun() : Base([](ArgTypes...) { 
         throw std::logic_error("EMPTY FUNCTION OBJECT");
@@ -268,7 +272,7 @@ void test1 () {
     Fun< float (int, int) > fun10(fun9);
     try { 
          fun0(9); //must throw
-         assert(false); 
+         assert(false);
     } catch(...) {}
     fun0 = fun1;
     assert(fun0(2)    == fun1(2));
