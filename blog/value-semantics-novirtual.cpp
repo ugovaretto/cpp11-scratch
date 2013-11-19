@@ -13,11 +13,27 @@
 //and outperform even regular non-virtual method invocations
 //if instead of static function pointers, non-static pointers are used the
 //performance is equal to virtual methods under -O3 optimizations
+//when using xxx::function it is not worth trying with closures: do use regular
+//functions which accept as the first parameter the model_t<> pointer to
+//operate on, using a closure on this or model_t.d results in >40% performance
+//penalty
 
 //to see the benefits of a static vtable you need link time optimization
 //clang on Apple: do use -O3 + lto
 //gcc or clang on linux: do install the gold linker (binutils-gold) then
 //rebuild gcc or clang with lto enabled
+
+//the printed time in nanoseconds is computed as
+// global time /
+// (num executions 
+//  * num elements
+//  * num function calls per elements)
+// and is proportional to the time it takes to perform a single method
+// invocation but it is *not* the actual method invocation time since e.g. 
+// in the case of non-virtual methods or full lto optimization with static
+// functions everything seems to be inlined
+
+//checkout results at the bottom of the file
 
 #include <cassert>
 #include <functional>
@@ -28,7 +44,12 @@
 #include <vector>
 #include <cstring>
 #include <iostream>
-#include "function.h" 
+#include "function.h"   //Malte Skarupke's std::function
+#include "simple-fun.h" //my own quick implementation of std::function always
+                        //faster than std and Malte's when using static
+                        //members, when not using static members Malte's version
+                        //is always the fastest
+                        
 
 using namespace std;
 
@@ -60,16 +81,24 @@ struct wrapper_t {
     }
     struct base_t {
         ~base_t() {Destroy();}
-        std::function< float () > GetX;
-        std::function< float () > GetY;
-        std::function< float () > GetZ;
-        std::function< float () > GetW;
-        std::function< float (float) > SetX;
-        std::function< float (float) > SetY;
-        std::function< float (float) > SetZ;
-        std::function< float (float) > SetW;
+        static std::function< float (const void*) > GetXImpl;
+        static std::function< float (const void*) > GetYImpl;
+        static std::function< float (const void*) > GetZImpl;
+        static std::function< float (const void*) > GetWImpl;
+        static std::function< float (void*, float) > SetXImpl;
+        static std::function< float (void*, float) > SetYImpl;
+        static std::function< float (void*, float) > SetZImpl;
+        static std::function< float (void*, float) > SetWImpl;
         std::function< base_t* () > Copy;
         std::function< void () > Destroy;
+        float GetX() const { return GetXImpl(this); }
+        float GetY() const { return GetYImpl(this); }
+        float GetZ() const { return GetZImpl(this); }
+        float GetW() const { return GetWImpl(this); }
+        float SetX(float x) { return SetXImpl(this, x); }
+        float SetY(float y) { return SetYImpl(this, y); }
+        float SetZ(float z) { return SetZImpl(this, z); }
+        float SetW(float w) { return SetWImpl(this, w); }
     };
     template < typename T >
     struct model_t : base_t {
@@ -81,31 +110,29 @@ struct wrapper_t {
             BuildVTable();
         }
         void BuildVTable() {
-            const T* p = &d;
-            T* pp = &d;
-            GetX = [p]() {
-                return p->GetX();            
+            GetXImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetX();            
             };
-            GetY = [p]() {
-                return p->GetY();            
+            GetYImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetY();            
             };
-            GetZ = [p]() {
-                return p->GetZ();            
+            GetZImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetZ();            
             };
-            GetW = [p]() {
-                return p->GetW();            
+            GetWImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetW();            
             };
-            SetX = [pp](float x_) {
-                return pp->SetX(x_);         
+            SetXImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetX(v);            
             };
-            SetY = [pp](float y_) {
-                return pp->SetY(y_);           
+            SetYImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetY(v);            
             };
-            SetZ = [pp](float z_) {
-                return pp->SetZ(z_);              
+            SetZImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetZ(v);            
             };
-            SetW = [pp](float w_) {
-                return pp->SetW(w_);            
+            SetWImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetW(v);            
             };
             Copy = [this]() {
                 return new model_t< T >(static_cast< model_t& >(*this));
@@ -118,6 +145,15 @@ struct wrapper_t {
     unique_ptr< base_t > model_;
 };
 
+
+std::function< float (const void*) > wrapper_t::base_t::GetXImpl;
+std::function< float (const void*) > wrapper_t::base_t::GetYImpl;
+std::function< float (const void*) > wrapper_t::base_t::GetZImpl;
+std::function< float (const void*) > wrapper_t::base_t::GetWImpl;
+std::function< float (void*, float) > wrapper_t::base_t::SetXImpl;
+std::function< float (void*, float) > wrapper_t::base_t::SetYImpl;
+std::function< float (void*, float) > wrapper_t::base_t::SetZImpl;
+std::function< float (void*, float) > wrapper_t::base_t::SetWImpl;
 
 //------------------------------------------------------------------------------
 //static function pointers
@@ -288,10 +324,8 @@ struct wrapper3_t {
     unique_ptr< base_t > model_;
 };
 
-#include "simple-fun.h"
 //------------------------------------------------------------------------------
-//alternative std::function implementation >50% faster than std::function
-//Developed by Malte Skarupke
+//my own std::function implementation, always sligthly faster than std
 struct wrapper4_t {
     float GetX() const { return model_->GetX(); }
     float GetY() const { return model_->GetY(); }
@@ -312,16 +346,25 @@ struct wrapper4_t {
     }
     struct base_t {
         ~base_t() {Destroy();}
-        Fun< float () > GetX;
-        Fun< float () > GetY;
-        Fun< float () > GetZ;
-        Fun< float () > GetW;
-        Fun< float (float) > SetX;
-        Fun< float (float) > SetY;
-        Fun< float (float) > SetZ;
-        Fun< float (float) > SetW;
+        static Fun< float (const void*) > GetXImpl;
+        static Fun< float (const void*) > GetYImpl;
+        static Fun< float (const void*) > GetZImpl;
+        static Fun< float (const void*) > GetWImpl;
+        static Fun< float (void*, float) > SetXImpl;
+        static Fun< float (void*, float) > SetYImpl;
+        static Fun< float (void*, float) > SetZImpl;
+        static Fun< float (void*, float) > SetWImpl;
         Fun< base_t* () > Copy;
         Fun< void () > Destroy;
+        float GetX() const { return GetXImpl(this); }
+        float GetY() const { return GetYImpl(this); }
+        float GetZ() const { return GetZImpl(this); }
+        float GetW() const { return GetWImpl(this); }
+        float SetX(float x) { return SetXImpl(this, x); }
+        float SetY(float y) { return SetYImpl(this, y); }
+        float SetZ(float z) { return SetZImpl(this, z); }
+        float SetW(float w) { return SetWImpl(this, w); }
+
     };
     template < typename T >
     struct model_t : base_t {
@@ -333,31 +376,29 @@ struct wrapper4_t {
             BuildVTable();
         }
         void BuildVTable() {
-            const T* p = &d;
-            T* pp = &d;
-            GetX = [p]() {
-                return p->GetX();            
+            GetXImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetX();            
             };
-            GetY = [p]() {
-                return p->GetY();            
+            GetYImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetY();            
             };
-            GetZ = [p]() {
-                return p->GetZ();            
+            GetZImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetZ();            
             };
-            GetW = [p]() {
-                return p->GetW();            
+            GetWImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetW();            
             };
-            SetX = [pp](float x_) {
-                return pp->SetX(x_);         
+            SetXImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetX(v);            
             };
-            SetY = [pp](float y_) {
-                return pp->SetY(y_);           
+            SetYImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetY(v);            
             };
-            SetZ = [pp](float z_) {
-                return pp->SetZ(z_);              
+            SetZImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetZ(v);            
             };
-            SetW = [pp](float w_) {
-                return pp->SetW(w_);            
+            SetWImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetW(v);            
             };
             Copy = [this]() {
                 return new model_t< T >(static_cast< model_t& >(*this));
@@ -369,6 +410,15 @@ struct wrapper4_t {
     };
     unique_ptr< base_t > model_;
 };
+
+Fun< float (const void*) > wrapper4_t::base_t::GetXImpl;
+Fun< float (const void*) > wrapper4_t::base_t::GetYImpl;
+Fun< float (const void*) > wrapper4_t::base_t::GetZImpl;
+Fun< float (const void*) > wrapper4_t::base_t::GetWImpl;
+Fun< float (void*, float) > wrapper4_t::base_t::SetXImpl;
+Fun< float (void*, float) > wrapper4_t::base_t::SetYImpl;
+Fun< float (void*, float) > wrapper4_t::base_t::SetZImpl;
+Fun< float (void*, float) > wrapper4_t::base_t::SetWImpl;
 
 //------------------------------------------------------------------------------
 //pointer to members initialized in derived class
@@ -592,6 +642,102 @@ struct wrapper6_t {
     unique_ptr< base_t > model_;
 };
 
+//------------------------------------------------------------------------------
+//alternative std::function implementation >50% faster than std::function
+//Developed by Malte Skarupke
+struct wrapper7_t {
+    float GetX() const { return model_->GetX(); }
+    float GetY() const { return model_->GetY(); }
+    float GetZ() const { return model_->GetZ(); }
+    float GetW() const { return model_->GetW(); }
+    float SetX( float x_ ) { return model_->SetX(x_); }
+    float SetY( float y_ ) { return model_->SetY(y_); }
+    float SetZ( float z_ ) { return model_->SetZ(z_); }
+    float SetW( float w_ ) { return model_->SetW(w_); }
+    wrapper7_t() = default;
+    wrapper7_t(wrapper7_t&& ) = default;
+    wrapper7_t(const wrapper7_t& w) : model_(w.model_->Copy()) {}
+    template < typename T >
+    wrapper7_t(const T& t) : model_(new model_t< T >(t)) {}
+    template < typename T >
+    T& get() {
+        return static_cast< model_t< T >& >(*model_).d;
+    }
+    struct base_t {
+        ~base_t() {Destroy();}
+        static func::function< float (const void*) > GetXImpl;
+        static func::function< float (const void*) > GetYImpl;
+        static func::function< float (const void*) > GetZImpl;
+        static func::function< float (const void*) > GetWImpl;
+        static func::function< float (void*, float) > SetXImpl;
+        static func::function< float (void*, float) > SetYImpl;
+        static func::function< float (void*, float) > SetZImpl;
+        static func::function< float (void*, float) > SetWImpl;
+        func::function< base_t* () > Copy;
+        func::function< void () > Destroy;
+        float GetX() const { return GetXImpl(this); }
+        float GetY() const { return GetYImpl(this); }
+        float GetZ() const { return GetZImpl(this); }
+        float GetW() const { return GetWImpl(this); }
+        float SetX(float x) { return SetXImpl(this, x); }
+        float SetY(float y) { return SetYImpl(this, y); }
+        float SetZ(float z) { return SetZImpl(this, z); }
+        float SetW(float w) { return SetWImpl(this, w); }
+
+    };
+    template < typename T >
+    struct model_t : base_t {
+        T d;
+        model_t(const T& t) : d(t) {
+            BuildVTable();
+        }    
+        model_t(const model_t& m) : d(m.d) {
+            BuildVTable();
+        }
+        void BuildVTable() {
+            GetXImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetX();            
+            };
+            GetYImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetY();            
+            };
+            GetZImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetZ();            
+            };
+            GetWImpl = [](const void* p) {
+                return static_cast< const model_t< T >* >(p)->d.GetW();            
+            };
+            SetXImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetX(v);            
+            };
+            SetYImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetY(v);            
+            };
+            SetZImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetZ(v);            
+            };
+            SetWImpl = [](void* p, float v) {
+                return static_cast< model_t< T >* >(p)->d.SetW(v);            
+            };
+            Copy = [this]() {
+                return new model_t< T >(static_cast< model_t& >(*this));
+            };
+            Destroy = [this]() {
+                static_cast< model_t< T >& >(*this).d.T::~T();
+            };                    
+        }
+    };
+    unique_ptr< base_t > model_;
+};
+
+func::function< float (const void*) > wrapper7_t::base_t::GetXImpl;
+func::function< float (const void*) > wrapper7_t::base_t::GetYImpl;
+func::function< float (const void*) > wrapper7_t::base_t::GetZImpl;
+func::function< float (const void*) > wrapper7_t::base_t::GetWImpl;
+func::function< float (void*, float) > wrapper7_t::base_t::SetXImpl;
+func::function< float (void*, float) > wrapper7_t::base_t::SetYImpl;
+func::function< float (void*, float) > wrapper7_t::base_t::SetZImpl;
+func::function< float (void*, float) > wrapper7_t::base_t::SetWImpl;
 
 
 //from
@@ -722,6 +868,19 @@ void testw6(int NUM_TESTS) {
         }
 }
 
+std::vector< wrapper7_t > Aw7(NUM_ELEMENTS, wrapper7_t(Vector4Test())),
+                          Bw7(NUM_ELEMENTS, wrapper7_t(Vector4Test())),  
+                          Cw7(NUM_ELEMENTS, wrapper7_t(Vector4Test()));
+void testw7(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
+            Cw7[i].SetX(Aw7[i].GetX() + Bw7[i].GetX());
+            Cw7[i].SetY(Aw7[i].GetY() + Bw7[i].GetY());
+            Cw7[i].SetZ(Aw7[i].GetZ() + Bw7[i].GetZ());
+            Cw7[i].SetW(Aw7[i].GetW() + Bw7[i].GetW());
+        }
+}
+
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
     for(int i = 0; i != NUM_ELEMENTS; ++i) {
@@ -759,6 +918,20 @@ int main(int argc, char** argv) {
          << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
+    testw6(numtests);
+    t2 = myclock_t::now();
+    d = t2 - t1;
+    cout << "Alternative to std::function:    "
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
+
+    t1 = myclock_t::now();
+    testw4(numtests);
+    t2 = myclock_t::now();
+    d = t2 - t1;
+    cout << "My own std::function:            "
+         << float(chrono::nanoseconds(d).count()) / calls << endl;                  
+
+    t1 = myclock_t::now();
     testw2(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
@@ -773,13 +946,6 @@ int main(int argc, char** argv) {
          << float(chrono::nanoseconds(d).count()) / calls << endl;
 
     t1 = myclock_t::now();
-    testw4(numtests);
-    t2 = myclock_t::now();
-    d = t2 - t1;
-    cout << "Alternative to std::function:    "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;
-
-    t1 = myclock_t::now();
     testw5(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
@@ -791,7 +957,141 @@ int main(int argc, char** argv) {
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Callbacks:                       "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;     
+         << float(chrono::nanoseconds(d).count()) / calls << endl;  
 
     return 0;
 }
+
+// RESULTS
+// -------
+
+// Hardware:
+
+// processor   : 0
+// vendor_id   : GenuineIntel
+// cpu family  : 6
+// model       : 23
+// model name  : Intel(R) Xeon(R) CPU           E5420  @ 2.50GHz
+// stepping    : 6
+// microcode   : 0x60b
+// cpu MHz     : 2493.730
+// cache size  : 6144 KB
+// physical id : 0
+// siblings    : 4
+// core id     : 0
+// cpu cores   : 4
+// apicid      : 0
+// initial apicid  : 0
+// fpu     : yes
+// fpu_exception   : yes
+// cpuid level : 10
+// wp      : yes
+// flags       : fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov
+//               pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe 
+//               syscall nx lm constant_tsc arch_perfmon pebs bts rep_good 
+//               nopl aperfmperf pni dtes64 monitor ds_cpl vmx est tm2 ssse3 
+//               cx16 xtpr pdcm dca sse4_1 lahf_lm dtherm tpr_shadow vnmi
+//               flexpriority
+// bogomips    : 4987.46
+// clflush size    : 64
+// cache_alignment : 64
+// address sizes   : 38 bits physical, 48 bits virtual
+// power management:
+
+// OS: Ubuntu 13.04
+
+//Compilers:
+//CLang llvm 3.4 (2013-11-18 snapshot) with gold linker plugin 
+//gcc 4.8.1 no gold linker
+
+//Best: CLang llvm 3.4 (2013-11-18 snapshot) with gold linker and lto 
+// clang++ -std=c++11 ../value-semantics-novirtual.cpp -flto -O3 -DNOVIRTUAL
+// a.out 100
+// Single method execution time (ns)
+// -----------------------------------
+// Reference (non-virtual):         0.843371
+// std::function:                   2.95573
+// Alternative to std::function:    2.93527
+// My own std::function:            2.56618
+// Function pointers:               0.694427 <<<
+// Virtual:                         2.87633
+// Pointer to members:              3.65078
+// Callbacks:                       2.91835
+
+// g++ -std=c++11 ../value-semantics-novirtual.cpp -O3
+// a.out 100
+// Single method execution time (ns)
+// -----------------------------------
+// Reference (virtual):             2.77228
+// std::function:                   2.96681
+// Alternative to std::function:    3.02521
+// My own std::function:            2.72485
+// Function pointers:               2.51679
+// Virtual:                         2.75736
+// Pointer to members:              3.43607
+// Callbacks:                       3.03872
+
+// g++ -std=c++11 ../value-semantics-novirtual.cpp -O3 -DNOVIRTUAL
+// a.out 100
+// Single method execution time (ns)
+// -----------------------------------
+// Reference (non-virtual):         0.985648
+// std::function:                   2.95736
+// Alternative to std::function:    3.0514
+// My own std::function:            2.71151
+// Function pointers:               2.50039
+// Virtual:                         2.75616
+// Pointer to members:              3.40965
+// Callbacks:                       3.04172
+
+// clang++ -std=c++11 ../value-semantics-novirtual.cpp -O3
+// a.out 100 
+// Single method execution time (ns)
+// -----------------------------------
+// Reference (virtual):             2.79378
+// std::function:                   3.12673
+// Alternative to std::function:    2.94879
+// My own std::function:            2.65235
+// Function pointers:               2.38956
+// Virtual:                         2.75857
+// Pointer to members:              3.64075
+// Callbacks:                       2.93292
+
+// clang++ -std=c++11 ../value-semantics-novirtual.cpp -O3 -flto
+// a.out 100
+// Single method execution time (ns)
+// -----------------------------------
+// Reference (virtual):             2.79266
+// std::function:                   2.91576
+// Alternative to std::function:    2.93675
+// My own std::function:            2.59382
+// Function pointers:               0.689505 
+// Virtual:                         2.74981
+// Pointer to members:              3.44271
+// Callbacks:                       2.93133
+
+// clang++ -std=c++11 ../value-semantics-novirtual.cpp  -O3 -DNOVIRTUAL
+// a.out 100
+// Single method execution time (ns)
+// -----------------------------------
+// Reference (non-virtual):         0.854446
+// std::function:                   2.99174
+// Alternative to std::function:    2.9939
+// My own std::function:            2.6373
+// Function pointers:               2.40005
+// Virtual:                         2.76247
+// Pointer to members:              3.50929
+// Callbacks:                       2.96531
+
+// clang++ -std=c++11 ../value-semantics-novirtual.cpp -flto -O3 -DNOVIRTUAL
+// a.out 100
+// Single method execution time (ns)
+// -----------------------------------
+// Reference (non-virtual):         0.843371
+// std::function:                   2.95573
+// Alternative to std::function:    2.93527
+// My own std::function:            2.56618
+// Function pointers:               0.694427 <<<
+// Virtual:                         2.87633
+// Pointer to members:              3.65078
+// Callbacks:                       2.91835

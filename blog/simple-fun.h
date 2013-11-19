@@ -1,7 +1,9 @@
 #pragma once
+
 //Author; Ugo Varetto
 //simple implementation of std::function-like class using lambdas and unions
-
+//slightly better performance than std::function, no difference whether I use
+//an std::vector for functor storage or a static char array
 //generic, need this to be able to declare Fun< int(int) > instead of
 //Fun< int, int >
 template < typename > struct Fun {};
@@ -42,27 +44,29 @@ protected:
         buf_ = f.buf_;
         return *this;
     }
-     //delegate functions
-    union {
+    //delegate functions
+    using DelegateType = union {
         R(*free_)(ArgTypes...);
         R(*method_)(void* ,  R (Object::*)(ArgTypes...), ArgTypes...);
         R(*cmethod_)(const void* , R (Object::*)(ArgTypes...) const,
                      ArgTypes...);
-    } f_;
+    };
     //delegate method invocation, either direct or through free functions
     //receiving an object instance pointer
-    union {
+    using DelegateInvocation = union {
         R(Object::*method_)(ArgTypes...);
         R(Object::*cmethod_)(ArgTypes...) const;
         R(*call_)(const FunBase*, ArgTypes...);
         R(*obj_)(FunBase*, ArgTypes...);
-    } m_;
+    };
+    DelegateType f_;
+    DelegateInvocation m_;
     void (*Destruct)(FunBase*) = nullptr;
     void (*CopyObj)(const FunBase&, FunBase&) = nullptr;
     //storage for functor objects, in a real-world scenario we would need to
     //either pass a custom allocator using e.g. stack memory for small objects
     //or use a custom data type
-    std::vector< char > buf_; 
+    std::vector< char > buf_;
     ~FunBase() {
         if(Destruct) Destruct(this);
      }
