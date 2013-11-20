@@ -95,10 +95,6 @@ public:
         Handler(h).Swap(*this);
         return *this;
     }
-    Handler& operator=(Handler& h) {
-        Handler(std::move(h)).Swap(*this);
-        return *this;
-    }
     Handler& operator=(const Handler&) = delete;
 private:
     void Swap(Handler& h) {
