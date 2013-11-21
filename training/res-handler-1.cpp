@@ -54,8 +54,8 @@ public:
     ~MemoryHandler() { 
         delete ptr_; //it is fine to call 'delete 0'
     }
-    MemoryHandler& operator=(MemoryHandler&& mh) {
-        MemoryHandler(mh).Swap(*this);
+    MemoryHandler& operator=(MemoryHandler mh) {
+        mh.Swap(*this);
         return *this;
     }
     MemoryHandler& operator=(MemoryHandler& mh) {
@@ -93,10 +93,6 @@ public:
     }
     Handler& operator=(Handler&& h) {
         Handler(h).Swap(*this);
-        return *this;
-    }
-    Handler& operator=(Handler& h) {
-        Handler(std::move(h)).Swap(*this);
         return *this;
     }
     Handler& operator=(const Handler&) = delete;
