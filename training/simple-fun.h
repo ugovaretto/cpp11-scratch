@@ -25,7 +25,7 @@ protected:
         : f_(fun.f_),
           m_(fun.m_),
           CopyObj(fun.CopyObj),
-          Destruct(fun.Destruct) {
+          Destroy(fun.Destroy) {
         CopyObj(fun, *this);
     }
     FunBase(R (*f)(ArgTypes...));
@@ -40,11 +40,11 @@ protected:
     //template < typename T > FunBase(const T& f) constructor
     FunBase& operator=(const FunBase& f) {
         if(&f == this) return *this;
-        if(Destruct) Destruct(this);
+        if(Destroy) Destroy(this);
         f_ = f.f_;
         m_ = f.m_;
         CopyObj = f.CopyObj;
-        Destruct = f.Destruct;
+        Destroy = f.Destroy;
         buf_ = f.buf_;
         return *this;
     }
@@ -65,14 +65,14 @@ protected:
     };
     DelegateType f_;
     DelegateInvocation m_;
-    void (*Destruct)(FunBase*) = nullptr;
+    void (*Destroy)(FunBase*) = nullptr;
     void (*CopyObj)(const FunBase&, FunBase&) = nullptr;
     //storage for functor objects, in a real-world scenario we would need to
     //either pass a custom allocator using e.g. stack memory for small objects
     //or use a custom data type
     std::vector< char > buf_;
     ~FunBase() {
-        if(Destruct) Destruct(this);
+        if(Destroy) Destroy(this);
      }
 };
 
@@ -84,8 +84,8 @@ FunBase< R (ArgTypes...) >::FunBase(R (*f)(ArgTypes...)) {
     m_.call_ = (T) ([](const FunBase* f, ArgTypes...args) {
          return f->f_.free_(std::forward< ArgTypes >(args)...);
     });
-    Destruct = [](FunBase*) {};
-    CopyObj  = [](const FunBase&, FunBase&) {};
+    Destroy = [](FunBase*) {};
+    CopyObj = [](const FunBase&, FunBase&) {};
 }
 
 template < typename R, typename...ArgTypes >
@@ -102,7 +102,7 @@ FunBase< R(ArgTypes...) >::FunBase(R (T::*f) (ArgTypes...) ) {
          });
     using OM = R (Object::*)(ArgTypes...);
     m_.method_ = reinterpret_cast< OM >(f); 
-    Destruct = [](FunBase*) {};
+    Destroy = [](FunBase*) {};
     CopyObj  = [](const FunBase&, FunBase&) {};
 }
 
@@ -120,8 +120,8 @@ FunBase< R(ArgTypes...) >::FunBase(R (T::*f) (ArgTypes...) const) {
         });
     using OM = R (Object::*)(ArgTypes...) const;
     m_.cmethod_ = reinterpret_cast< OM >(f);
-    Destruct = [](FunBase*) {}; 
-    CopyObj  = [](const FunBase&, FunBase&) {};
+    Destroy = [](FunBase*) {}; 
+    CopyObj = [](const FunBase&, FunBase&) {};
 }
 
 template < typename R, typename...ArgTypes >
@@ -134,11 +134,11 @@ FunBase< R (ArgTypes...) >::FunBase(const F& f) {
         return R((reinterpret_cast< F* >(&fb->buf_[0]))
                                 ->operator()(std::forward< ArgTypes >(args)...));
     });
-    Destruct = [](FunBase* f) {
+    Destroy = [](FunBase* f) {
         F* fun = reinterpret_cast< F* >(&f->buf_[0]);
         fun->F::~F();
     };
-    CopyObj  = [](const FunBase& src, FunBase& target) {
+    CopyObj = [](const FunBase& src, FunBase& target) {
         target.buf_.resize(src.buf_.size());
         new (&target.buf_[0]) F(*reinterpret_cast< const F* >(&src.buf_[0]));
     };
