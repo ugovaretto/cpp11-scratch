@@ -140,7 +140,7 @@ FunBase< R (ArgTypes...) >::FunBase(const F& f) {
     };
     CopyObj  = [](const FunBase& src, FunBase& target) {
         target.buf_.resize(src.buf_.size());
-        new (&target.buf_[0]) F(*reinterpret_cast< const F* >(src.buf_[0]));
+        new (&target.buf_[0]) F(*reinterpret_cast< const F* >(&src.buf_[0]));
     };
 }
 
