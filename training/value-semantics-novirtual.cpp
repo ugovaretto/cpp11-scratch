@@ -739,6 +739,106 @@ func::function< float (void*, float) > wrapper7_t::base_t::SetYImpl;
 func::function< float (void*, float) > wrapper7_t::base_t::SetZImpl;
 func::function< float (void*, float) > wrapper7_t::base_t::SetWImpl;
 
+//------------------------------------------------------------------------------
+
+struct wrapper8_t {
+    using GETTER  = float (*)(const void*);
+    using SETTER  = float (*)(void*, float);
+    using COPY    = void (*)(const void*, void*);
+    using DESTROY = void (*)(const void* );
+    static GETTER GetXImpl;
+    static GETTER GetYImpl;
+    static GETTER GetZImpl;
+    static GETTER GetWImpl;
+    static SETTER SetXImpl;
+    static SETTER SetYImpl;
+    static SETTER SetZImpl;
+    static SETTER SetWImpl;
+    static COPY Copy;
+    static DESTROY Destroy; 
+    template < typename T >
+    void BuildVTable() {
+        GetXImpl = [](const void* p) {
+            return static_cast< const T* >(p)->GetX();            
+        };
+        GetYImpl = [](const void* p) {
+            return static_cast< const T* >(p)->GetY();            
+        };
+        GetZImpl = [](const void* p) {
+            return static_cast< const T* >(p)->GetZ();            
+        };
+        GetWImpl = [](const void* p) {
+            return static_cast< const T* >(p)->GetW();            
+        };
+        SetXImpl = [](void* p, float v) {
+            return static_cast< T* >(p)->SetX(v);            
+        };
+        SetYImpl = [](void* p, float v) {
+            return static_cast< T* >(p)->SetY(v);                    
+        };
+        SetZImpl = [](void* p, float v) {
+            return static_cast< T* >(p)->SetZ(v);                    
+        };
+        SetWImpl = [](void* p, float v) {
+            return static_cast< T* >(p)->SetW(v);            
+        };
+        Copy = [](const void* src, void* target) {
+            new (target) T(*static_cast< const T* >(src));
+        };
+        Destroy = [](const void* p) {
+            static_cast< const T* >(p)->T::~T();
+        };                    
+    }
+    float GetX() const { return GetXImpl(&model_[0]); }
+    float GetY() const { return GetYImpl(&model_[0]); }
+    float GetZ() const { return GetZImpl(&model_[0]); }
+    float GetW() const { return GetWImpl(&model_[0]); }
+    float SetX(float x) { return SetXImpl(&model_[0], x); }
+    float SetY(float y) { return SetYImpl(&model_[0], y); }
+    float SetZ(float z) { return SetZImpl(&model_[0], z); }
+    float SetW(float w) { return SetWImpl(&model_[0], w); }
+
+    ~wrapper8_t() { Destroy(&model_[0]); }
+    wrapper8_t() = default;
+    wrapper8_t(wrapper8_t&& ) = default;
+    wrapper8_t(const wrapper8_t& w)  
+    //     GetXImpl(w.GetXImpl),
+    //     GetYImpl(w.GetYImpl),
+    //     GetZImpl(w.GetZImpl),
+    //     GetWImpl(w.GetWImpl),
+    //     SetXImpl(w.SetXImpl),
+    //     SetYImpl(w.SetYImpl),
+    //     SetZImpl(w.SetZImpl),
+    //     SetWImpl(w.SetWImpl),
+    //     Destroy(w.Destroy),
+        /*Copy(w.Copy)*/ {
+            //model_.resize(sizeof(w.model_.size()));
+            w.Copy(&w.model_[0], &model_[0]);   
+        } 
+    template < typename T >
+    wrapper8_t(const T& t) {
+        //model_.resize(sizeof(t));
+        new (&model_[0]) T(t);
+        BuildVTable< T >();
+    }
+    template < typename T >
+    T& get() {
+        return *reinterpret_cast< T* >(&model_[0]);
+    }
+    std::vector< char > model_; //using stack based allocation: ~20% faster
+};
+
+wrapper8_t::GETTER wrapper8_t::GetXImpl;
+wrapper8_t::GETTER wrapper8_t::GetYImpl;
+wrapper8_t::GETTER wrapper8_t::GetZImpl;
+wrapper8_t::GETTER wrapper8_t::GetWImpl;
+wrapper8_t::SETTER wrapper8_t::SetXImpl;
+wrapper8_t::SETTER wrapper8_t::SetYImpl;
+wrapper8_t::SETTER wrapper8_t::SetZImpl;
+wrapper8_t::SETTER wrapper8_t::SetWImpl;
+wrapper8_t::DESTROY wrapper8_t::Destroy;
+wrapper8_t::COPY wrapper8_t::Copy;
+
 
 //from
 //http://assemblyrequired.crashworks.org/2009/01/19/how-slow-are-virtual-functions-really
@@ -881,6 +981,19 @@ void testw7(int NUM_TESTS) {
         }
 }
 
+std::vector< wrapper8_t > Aw8(NUM_ELEMENTS, wrapper8_t(Vector4Test())),
+                          Bw8(NUM_ELEMENTS, wrapper8_t(Vector4Test())),  
+                          Cw8(NUM_ELEMENTS, wrapper8_t(Vector4Test()));
+void testw8(int NUM_TESTS) {
+    for (int n = 0 ; n != NUM_TESTS; ++n)
+        for (int i=0; i != NUM_ELEMENTS ; ++i) {
+            Cw8[i].SetX(Aw8[i].GetX() + Bw8[i].GetX());
+            Cw8[i].SetY(Aw8[i].GetY() + Bw8[i].GetY());
+            Cw8[i].SetZ(Aw8[i].GetZ() + Bw8[i].GetZ());
+            Cw8[i].SetW(Aw8[i].GetW() + Bw8[i].GetW());
+        }
+}
+
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
     for(int i = 0; i != NUM_ELEMENTS; ++i) {
@@ -957,7 +1070,14 @@ int main(int argc, char** argv) {
     t2 = myclock_t::now();
     d = t2 - t1;
     cout << "Callbacks:                       "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;  
+         << float(chrono::nanoseconds(d).count()) / calls << endl;
+
+    t1 = myclock_t::now();
+    testw8(numtests);
+    t2 = myclock_t::now();
+    d = t2 - t1;
+    cout << "XXXXXXXXX:                       "
+         << float(chrono::nanoseconds(d).count()) / calls << endl;         
 
     return 0;
 }
