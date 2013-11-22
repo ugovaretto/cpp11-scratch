@@ -115,8 +115,11 @@ std::tuple< H*, Args*... > to_tupleref(std::vector< void* >& v) {
 //------------------------------------------------------------------------------
 template < typename... Args >
 std::vector< void* > make_vector_2(Args&&...args) {
-    void* v[] = 
-        {(void*)((typename std::remove_reference<Args>::type*)(&args))...};
+    void* v[] = {  const_cast< void* >(
+                     static_cast< const void* >(
+                        const_cast< typename std::remove_reference<Args>::type* const >(&args)))...};
+        //{(void*)((typename std::remove_reference<Args>::type*)(&args))...};
+
     return std::vector< void* >(v, v + sizeof...(Args));
 }
 
@@ -215,8 +218,9 @@ int main(int, char**) {
     int a = 1;
     float b = 2.0f;
     double d = 1.0;
+    const int ra = a;
     
-    std::vector< void* > vp = make_vector_2(a, b, d);
+    std::vector< void* > vp = make_vector_2(ra, b, d);
     assert(&a == vp[0]);
     assert(&b == vp[1]);
     assert(&d == vp[2]);
