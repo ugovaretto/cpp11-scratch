@@ -812,12 +812,12 @@ struct wrapper8_t {
     //     SetWImpl(w.SetWImpl),
     //     Destroy(w.Destroy),
         /*Copy(w.Copy)*/ {
-            //model_.resize(sizeof(w.model_.size()));
+            model_.resize(sizeof(w.model_.size()));
             w.Copy(&w.model_[0], &model_[0]);   
         } 
     template < typename T >
     wrapper8_t(const T& t) {
-        //model_.resize(sizeof(t));
+        model_.resize(sizeof(t));
         new (&model_[0]) T(t);
         BuildVTable< T >();
     }
