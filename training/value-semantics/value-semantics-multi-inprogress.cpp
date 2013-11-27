@@ -825,7 +825,7 @@ struct wrapper8_t {
     T& get() {
         return *reinterpret_cast< T* >(&model_[0]);
     }
-    std::vector< char > model_; //using stack based allocation: ~20% faster
+    std::vector< char > model_; //using stack based allocation is ~20% faster
 };
 
 wrapper8_t::GETTER wrapper8_t::GetXImpl;

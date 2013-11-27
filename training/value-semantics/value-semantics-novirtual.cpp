@@ -44,11 +44,11 @@
 #include <vector>
 #include <cstring>
 #include <iostream>
-#include "function.h"   //Malte Skarupke's std::function
-#include "simple-fun.h" //my own quick implementation of std::function always
-                        //faster than std and Malte's when using static
-                        //members, when not using static members Malte's version
-                        //is always the fastest
+#include "../etc/function.h" //Malte Skarupke's std::function
+#include "../simple-fun.h" //my own quick implementation of std::function always
+                           //faster than std and Malte's when using static
+                           //members, when not using static members Malte's version
+                           //is always the fastest
                         
 
 using namespace std;
@@ -256,6 +256,7 @@ struct wrapper2_t {
         model_t(const T& t) : base_t(t), d(t) {}
         base_t* Copy() const { return new model_t(*this); }
     };
+    
     unique_ptr< base_t > model_;
 };
 using GF = float (*)(const void* );
@@ -825,7 +826,9 @@ struct wrapper8_t {
     T& get() {
         return *reinterpret_cast< T* >(&model_[0]);
     }
+    //struct B {char c[8];};
     std::vector< char > model_; //using stack based allocation: ~20% faster
+    //double model_[]
 };
 
 wrapper8_t::GETTER wrapper8_t::GetXImpl;

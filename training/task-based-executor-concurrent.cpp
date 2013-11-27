@@ -239,15 +239,10 @@ public:
         auto ft = p->get_future();
         queue_.Push([=]{
             try {
-                //p->set_value(f(data_));
+                p->set_value(f(data_));
             } catch(...) {
-                //p->set_exception(std::current_exception());
+                p->set_exception(std::current_exception());
             }
-=======
-    void operator()(F f) {
-        queue_.Push([=]() {
-            f(data_);
->>>>>>> a6d87a289d8f9813aa937d3dfccfc675ea22cd53
         });
     }
     ~ConcurrentAccess() {
@@ -278,24 +273,6 @@ int main(int argc, char** argv) {
                   << std::endl;
         using namespace std;
         Executor exec(numthreads);
-<<<<<<< HEAD
-        std::string msg = "message - ";
-        std::function< int (std::string&, int) > l = [sleeptime_ms, &exec](std::string& str, int i) -> int{
-                    ConcurrentAccess< std::string& > s(str, exec);
-                    s([i, &exec](std::string& s) {
-                        s += " " + std::to_string(i);
-                    });
-                    std::this_thread::sleep_for(
-                        std::chrono::milliseconds(sleeptime_ms));
-                    return 0;             
-                };
-        exec(l);        
-        std::vector< std::future< void > > futures;        
-        for(int t = 0; t != numtasks; ++t) {
-            futures.push_back(exec(l, msg, t));    
-        }        
-        std::cout << "result string:\n" << msg << std::endl;       
-=======
         Executor exec_aux(1);
         string msg = "start\n";
         //if single threaded use
@@ -315,8 +292,6 @@ int main(int argc, char** argv) {
             }));
         for(auto& f: v) f.wait();
         std::cout << "Done\n";
-            
->>>>>>> a6d87a289d8f9813aa937d3dfccfc675ea22cd53
         return 0;
     } catch(const std::exception& e) {
         std::cerr << e.what() << std::endl;
