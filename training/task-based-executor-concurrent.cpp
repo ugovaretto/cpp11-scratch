@@ -231,7 +231,6 @@ public:
              }))
     {}
     template < typename F >
-<<<<<<< HEAD
     auto operator()(F f) 
     -> std::future< decltype(f(data_)) > {
         using R = decltype(f(data_));
@@ -244,6 +243,7 @@ public:
                 p->set_exception(std::current_exception());
             }
         });
+        return ft;
     }
     ~ConcurrentAccess() {
         queue_.Push([=]{done_ = true;});
@@ -282,12 +282,16 @@ int main(int argc, char** argv) {
             v.push_back(exec([&, i]{
                 std::this_thread::sleep_for(
                     std::chrono::milliseconds(sleeptime_ms));
-                s([=](string& s){
+                s([=](string& s) {
                     s += to_string(i) + " " + to_string(i);
                     s += "\n";
+                    return 0; //<- !!! Need a return value since void return
+                              //   type not supported yet
                 });
-                s([](string& s){
-                    cout << s;
+                s([](string& s) {
+                     cout << s;
+                    return 0; //<- !!! Need a return value since void return
+                              //   type not supported yet
                 });
             }));
         for(auto& f: v) f.wait();

@@ -6,17 +6,20 @@
 //it is therefore required that the base destructor invoke the derived 
 //instance destructor or the wrapped-data destructor directly.
 
+//Options:
+//-DNOVIRTUAL: use non-virtual methods for reference test
+//-DUSE_REFS:  use references instead of direct element access in tests
+
 //SUMMARY:
-//any approach other than std::function or func::function including a base_t 
-//with virtual methods is fine
+//any approach other than std::function with clang's libc++ is fine;
 //static vtables are much faster than anything else when lto enabled
-//and outperform even regular non-virtual method invocations
+//and outperform even regular non-virtual method invocations;
 //if instead of static function pointers, non-static pointers are used the
-//performance is equal to virtual methods under -O3 optimizations
+//performance is equal to virtual methods under -O3 optimizations;
 //when using xxx::function it is not worth trying with closures: do use regular
 //functions which accept as the first parameter the model_t<> pointer to
 //operate on, using a closure on this or model_t.d results in >40% performance
-//penalty
+//penalty;
 
 //to see the benefits of a static vtable you need link time optimization
 //clang on Apple: do use -O3 + lto
@@ -35,6 +38,22 @@
 
 //checkout results at the bottom of the file
 
+//Also: try to replace the set(get() + get()) expression with more complex e.g.
+//sqrt(get() +*/- get()) you'll find that most of the time is still spent in the
+//actual function/method invocation
+
+//Note 1: on linux it seems that the std::function implementation found in
+//clang libc++ (svn snapshot on 20131128) with llvm 3.4 is actually 
+//slower than the gcc 4.8.1 version
+
+//Note 2: replacing direct element access with access through references gives
+//better performance under any -O level
+
+//Note 3: try to change the number of elements in the test array from
+//cache-friendly (e.g. 1024, or anything small) to bigger (100k)
+//values: for big numbers lto has no effect and function pointers and
+//virtual methods perform better than the actual wrapped objects
+
 #include <cassert>
 #include <functional>
 #include <memory>
@@ -47,10 +66,9 @@
 #include "../etc/function.h" //Malte Skarupke's std::function
 #include "../simple-fun.h" //my own quick implementation of std::function always
                            //faster than std and Malte's when using static
-                           //members, when not using static members Malte's version
-                           //is always the fastest
+                           //members
+#include <algorithm>
                         
-
 using namespace std;
 
 #ifdef NOVIRTUAL
@@ -583,14 +601,14 @@ R WrapperV(const void*  obj) {
 struct wrapper6_t {
     using GF = Callback< float, void >;
     using SF = Callback< float, float >;
-    GF GetX;
-    GF GetY;
-    GF GetZ;
-    GF GetW;
-    SF SetX;
-    SF SetY;
-    SF SetZ;
-    SF SetW;
+    mutable GF GetX;
+    mutable GF GetY;
+    mutable GF GetZ;
+    mutable GF GetW;
+    mutable SF SetX;
+    mutable SF SetY;
+    mutable SF SetZ;
+    mutable SF SetW;
     wrapper6_t() = default;
     wrapper6_t(wrapper6_t&& ) = delete;
     wrapper6_t(const wrapper6_t& w) : model_(w.model_->Copy(this)) {
@@ -741,7 +759,8 @@ func::function< float (void*, float) > wrapper7_t::base_t::SetZImpl;
 func::function< float (void*, float) > wrapper7_t::base_t::SetWImpl;
 
 //------------------------------------------------------------------------------
-
+//same as wrapper2_t i.e. static function pointers but stored directly into
+//the wrapper class instead of going through base_t->model_t member types
 struct wrapper8_t {
     using GETTER  = float (*)(const void*);
     using SETTER  = float (*)(void*, float);
@@ -802,17 +821,7 @@ struct wrapper8_t {
     ~wrapper8_t() { Destroy(&model_[0]); }
     wrapper8_t() = default;
     wrapper8_t(wrapper8_t&& ) = default;
-    wrapper8_t(const wrapper8_t& w)  
-    //     GetXImpl(w.GetXImpl),
-    //     GetYImpl(w.GetYImpl),
-    //     GetZImpl(w.GetZImpl),
-    //     GetWImpl(w.GetWImpl),
-    //     SetXImpl(w.SetXImpl),
-    //     SetYImpl(w.SetYImpl),
-    //     SetZImpl(w.SetZImpl),
-    //     SetWImpl(w.SetWImpl),
-    //     Destroy(w.Destroy),
-        /*Copy(w.Copy)*/ {
+    wrapper8_t(const wrapper8_t& w)  {
             model_.resize(sizeof(w.model_.size()));
             w.Copy(&w.model_[0], &model_[0]);   
         } 
@@ -876,7 +885,7 @@ public:
 
 //difference between cache-friendly and non-cache friendly values: static
 //pointers wtih lto optimizaiton (almost) not affected!
-static const int NUM_ELEMENTS = 1024;//122222;
+static const int NUM_ELEMENTS = 1024;//37025; //122222;
 
 //------------------------------------------------------------------------------
 std::vector< shared_ptr< Vector4TestV > > A(NUM_ELEMENTS),
@@ -885,10 +894,20 @@ std::vector< shared_ptr< Vector4TestV > > A(NUM_ELEMENTS),
 void test(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            Vector4TestV& c = *C[i];
+            const Vector4TestV& a = *A[i];
+            const Vector4TestV& b = *B[i];
+            c.SetX(a.GetX() + b.GetX());
+            c.SetY(a.GetY() + b.GetY());
+            c.SetZ(a.GetZ() + b.GetZ());
+            c.SetW(a.GetW() + b.GetW());
+#else            
             C[i]->SetX(A[i]->GetX() + B[i]->GetX());
             C[i]->SetY(A[i]->GetY() + B[i]->GetY());
             C[i]->SetZ(A[i]->GetZ() + B[i]->GetZ());
             C[i]->SetW(A[i]->GetW() + B[i]->GetW());
+#endif            
         }
 }
 
@@ -898,10 +917,20 @@ std::vector< wrapper_t > Aw(NUM_ELEMENTS, wrapper_t(Vector4Test())),
 void testw(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper_t& C = Cw[i];
+            const wrapper_t& A = Aw[i];
+            const wrapper_t& B = Bw[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw[i].SetX(Aw[i].GetX() + Bw[i].GetX());
             Cw[i].SetY(Aw[i].GetY() + Bw[i].GetY());
             Cw[i].SetZ(Aw[i].GetZ() + Bw[i].GetZ());
             Cw[i].SetW(Aw[i].GetW() + Bw[i].GetW());
+#endif            
         }
 }
 
@@ -911,11 +940,22 @@ std::vector< wrapper2_t > Aw2(NUM_ELEMENTS, wrapper2_t((Vector4Test()))),
 void testw2(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper2_t& C = Cw2[i];
+            const wrapper2_t& A = Aw2[i];
+            const wrapper2_t& B = Bw2[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw2[i].SetX(Aw2[i].GetX() + Bw2[i].GetX());
             Cw2[i].SetY(Aw2[i].GetY() + Bw2[i].GetY());
             Cw2[i].SetZ(Aw2[i].GetZ() + Bw2[i].GetZ());
             Cw2[i].SetW(Aw2[i].GetW() + Bw2[i].GetW());
+#endif            
         }
+
 }
 
 std::vector< wrapper3_t > Aw3(NUM_ELEMENTS, wrapper3_t(Vector4Test())),
@@ -924,10 +964,20 @@ std::vector< wrapper3_t > Aw3(NUM_ELEMENTS, wrapper3_t(Vector4Test())),
 void testw3(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper3_t& C = Cw3[i];
+            const wrapper3_t& A = Aw3[i];
+            const wrapper3_t& B = Bw3[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw3[i].SetX(Aw3[i].GetX() + Bw3[i].GetX());
             Cw3[i].SetY(Aw3[i].GetY() + Bw3[i].GetY());
             Cw3[i].SetZ(Aw3[i].GetZ() + Bw3[i].GetZ());
             Cw3[i].SetW(Aw3[i].GetW() + Bw3[i].GetW());
+#endif            
         }
 }
 
@@ -938,10 +988,20 @@ std::vector< wrapper4_t > Aw4(NUM_ELEMENTS, wrapper4_t(Vector4Test())),
 void testw4(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper4_t& C = Cw4[i];
+            const wrapper4_t& A = Aw4[i];
+            const wrapper4_t& B = Bw4[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw4[i].SetX(Aw4[i].GetX() + Bw4[i].GetX());
             Cw4[i].SetY(Aw4[i].GetY() + Bw4[i].GetY());
             Cw4[i].SetZ(Aw4[i].GetZ() + Bw4[i].GetZ());
             Cw4[i].SetW(Aw4[i].GetW() + Bw4[i].GetW());
+#endif            
         }
 }
 
@@ -951,10 +1011,20 @@ std::vector< wrapper5_t > Aw5(NUM_ELEMENTS, wrapper5_t(Vector4Test())),
 void testw5(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper5_t& C = Cw5[i];
+            const wrapper5_t& A = Aw5[i];
+            const wrapper5_t& B = Bw5[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw5[i].SetX(Aw5[i].GetX() + Bw5[i].GetX());
             Cw5[i].SetY(Aw5[i].GetY() + Bw5[i].GetY());
             Cw5[i].SetZ(Aw5[i].GetZ() + Bw5[i].GetZ());
             Cw5[i].SetW(Aw5[i].GetW() + Bw5[i].GetW());
+#endif            
         }
 }
 
@@ -964,10 +1034,20 @@ std::vector< wrapper6_t > Aw6(NUM_ELEMENTS, wrapper6_t(Vector4Test())),
 void testw6(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper6_t& C = Cw6[i];
+            const wrapper6_t& A = Aw6[i];
+            const wrapper6_t& B = Bw6[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw6[i].SetX(Aw6[i].GetX() + Bw6[i].GetX());
             Cw6[i].SetY(Aw6[i].GetY() + Bw6[i].GetY());
             Cw6[i].SetZ(Aw6[i].GetZ() + Bw6[i].GetZ());
             Cw6[i].SetW(Aw6[i].GetW() + Bw6[i].GetW());
+#endif            
         }
 }
 
@@ -977,10 +1057,20 @@ std::vector< wrapper7_t > Aw7(NUM_ELEMENTS, wrapper7_t(Vector4Test())),
 void testw7(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper7_t& C = Cw7[i];
+            const wrapper7_t& A = Aw7[i];
+            const wrapper7_t& B = Bw7[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw7[i].SetX(Aw7[i].GetX() + Bw7[i].GetX());
             Cw7[i].SetY(Aw7[i].GetY() + Bw7[i].GetY());
             Cw7[i].SetZ(Aw7[i].GetZ() + Bw7[i].GetZ());
             Cw7[i].SetW(Aw7[i].GetW() + Bw7[i].GetW());
+#endif            
         }
 }
 
@@ -990,26 +1080,39 @@ std::vector< wrapper8_t > Aw8(NUM_ELEMENTS, wrapper8_t(Vector4Test())),
 void testw8(int NUM_TESTS) {
     for (int n = 0 ; n != NUM_TESTS; ++n)
         for (int i=0; i != NUM_ELEMENTS ; ++i) {
+#ifdef USE_REFS            
+            wrapper8_t& C = Cw8[i];
+            const wrapper8_t& A = Aw8[i];
+            const wrapper8_t& B = Bw8[i];
+            C.SetX(A.GetX() + B.GetX());
+            C.SetY(A.GetY() + B.GetY());
+            C.SetZ(A.GetZ() + B.GetZ());
+            C.SetW(A.GetW() + B.GetW());
+#else
             Cw8[i].SetX(Aw8[i].GetX() + Bw8[i].GetX());
             Cw8[i].SetY(Aw8[i].GetY() + Bw8[i].GetY());
             Cw8[i].SetZ(Aw8[i].GetZ() + Bw8[i].GetZ());
             Cw8[i].SetW(Aw8[i].GetW() + Bw8[i].GetW());
+#endif            
         }
 }
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
+    
     for(int i = 0; i != NUM_ELEMENTS; ++i) {
         A[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
         B[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
         C[i] = shared_ptr< Vector4TestV >(new Vector4TestV);
     }
-    int numtests = argc == 1 ? 1 : stoi(argv[1]);
+    const int numtests = argc == 1 ? 1 : stoi(argv[1]);
     const int calls_per_iteration = 12;
     const int calls = numtests * NUM_ELEMENTS * calls_per_iteration;
     using myclock_t = chrono::high_resolution_clock;
     using duration  = chrono::high_resolution_clock::duration;
     using timepoint = chrono::high_resolution_clock::time_point;
+
+    vector< pair< string, duration > > data;
 
     cout << "\nSingle method execution time (ns)\n"
          << "-----------------------------------\n";
@@ -1030,58 +1133,60 @@ int main(int argc, char** argv) {
     testw(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "std::function:                   "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;
+    data.push_back(make_pair("std::function:                   ", d));     
 
     t1 = myclock_t::now();
     testw6(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "Alternative to std::function:    "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;
+    data.push_back(make_pair("Alternative to std::function:    ", d));     
 
     t1 = myclock_t::now();
     testw4(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "My own std::function:            "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;                  
+    data.push_back(make_pair("My own std::function:            ", d));                       
 
     t1 = myclock_t::now();
     testw2(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "Function pointers:               "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;
-
-    t1 = myclock_t::now();
-    testw3(numtests);
-    t2 = myclock_t::now();
-    d = t2 - t1;
-    cout << "Virtual:                         "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;
-
-    t1 = myclock_t::now();
-    testw5(numtests);
-    t2 = myclock_t::now();
-    d = t2 - t1;
-    cout << "Pointer to members:              "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;
-
-    t1 = myclock_t::now();
-    testw6(numtests);
-    t2 = myclock_t::now();
-    d = t2 - t1;
-    cout << "Callbacks:                       "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;
+    data.push_back(make_pair("Function pointers:               ", d));     
 
     t1 = myclock_t::now();
     testw8(numtests);
     t2 = myclock_t::now();
     d = t2 - t1;
-    cout << "XXXXXXXXX:                       "
-         << float(chrono::nanoseconds(d).count()) / calls << endl;         
+    data.push_back(make_pair("Function pointers in wrapper:    ", d));           
 
+    t1 = myclock_t::now();
+    testw3(numtests);
+    t2 = myclock_t::now();
+    d = t2 - t1;
+    data.push_back(make_pair("Virtual:                         ", d));     
+
+    t1 = myclock_t::now();
+    testw5(numtests);
+    t2 = myclock_t::now();
+    d = t2 - t1;
+    data.push_back(make_pair("Pointer to members:              ", d));    
+
+    t1 = myclock_t::now();
+    testw6(numtests);
+    t2 = myclock_t::now();
+    d = t2 - t1;
+    data.push_back(make_pair("Callbacks:                       ", d));     
+    
+    using P = pair< string, duration >;
+    sort(data.begin(), data.end(), [](const P& v1, const P& v2) {
+        return v1.second < v2.second;
+    });
+    std::cout << std::endl;
+    for(auto& i: data) {
+        std::cout << i.first 
+                  << float(chrono::nanoseconds(i.second).count()) / calls
+                  << std::endl;
+    }
     return 0;
 }
 
