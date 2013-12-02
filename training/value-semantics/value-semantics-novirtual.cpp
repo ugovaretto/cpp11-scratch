@@ -77,6 +77,31 @@ using namespace std;
 #define VIR virtual
 #endif
 
+template < template < class Y > class M, typename R, typename T, typename... ArgTypes >
+R call(void* p, R (T::*m)(ArgTypes...), ArgTypes...args) {
+    return (static_cast< M< T >* >(p)->d.*m)(args...);
+}
+
+template < template < class Y > class M, typename R, typename T, typename... ArgTypes >
+R call(const void* p, R (T::*m)(ArgTypes...) const, ArgTypes...args) {
+    return (static_cast< const M< T >* >(p)->d.*m)(args...);
+}
+
+template < template < class Y > class M, typename T, typename... ArgTypes >
+void call(void* p, void (T::*m)(ArgTypes...), ArgTypes...args) {
+    (static_cast< M< T >* >(p)->d.*m)(args...);
+}
+
+template < template < class Y > class M, typename T, typename... ArgTypes >
+void call(const void* p, void (T::*m)(ArgTypes...) const, ArgTypes...args) {
+    (static_cast< const M< T >* >(p)->d.*m)(args...);
+}
+
+template < template < class Y > class M, typename T >
+void call_destructor(const void* p) {
+    (static_cast< const M< T >* >(p)->d.T::~T());
+}
+
 //------------------------------------------------------------------------------
 //std::function [WORST]
 struct wrapper_t {
@@ -120,6 +145,7 @@ struct wrapper_t {
     };
     template < typename T >
     struct model_t : base_t {
+        using wrapper = wrapper_t;
         T d;
         model_t(const T& t) : d(t) {
             BuildVTable();
@@ -129,7 +155,7 @@ struct wrapper_t {
         }
         void BuildVTable() {
             GetXImpl = [](const void* p) {
-                return static_cast< const model_t< T >* >(p)->d.GetX();            
+                return static_cast< const model_t< T >* >(p)->d.GetX();       
             };
             GetYImpl = [](const void* p) {
                 return static_cast< const model_t< T >* >(p)->d.GetY();            
@@ -217,40 +243,51 @@ struct wrapper2_t {
         ~base_t() {Destroy();}
         template < typename T >
         void BuildVTable() {
+            using wrapper = wrapper2_t;
             if(!vtable::GetXImpl) {
             vtable::GetXImpl = (GF)([](const void* self) {
-                return reinterpret_cast< const model_t< T >* >(self)->d.GetX();
+                //return static_cast< const model_t< T >* >(self)->d.GetX();
+                return call< wrapper::model_t >(self, &T::GetX);      
                            
             });
             vtable::GetYImpl = (GF)([](const void* self) {
-                return reinterpret_cast< const model_t< T >* >(self)->d.GetY();
+                //return static_cast< const model_t< T >* >(self)->d.GetY();
+                return call< wrapper::model_t >(self, &T::GetY);
                            
             });
             vtable::GetZImpl = (GF)([](const void* self) {
-                return reinterpret_cast< const model_t< T >* >(self)->d.GetZ();
+                //return static_cast< const model_t< T >* >(self)->d.GetZ();
+                return call< wrapper::model_t >(self, &T::GetZ);
                            
             });
             vtable::GetWImpl = (GF)([](const void* self) {
-                return reinterpret_cast< const model_t< T >* >(self)->d.GetW();
+                //return static_cast< const model_t< T >* >(self)->d.GetW();
+                return call< wrapper::model_t >(self, &T::GetW);
                            
             });
             vtable::SetXImpl = (SF)([](void* self, float x_) {
-                return reinterpret_cast< model_t< T >* >(self)->d.SetX(x_);
+                //return static_cast< model_t< T >* >(self)->d.SetX(x_);
+                return call< wrapper::model_t >(self, &T::SetX, x_);
             });
             vtable::SetYImpl = (SF)([](void* self, float y_) {
-                return reinterpret_cast< model_t< T >* >(self)->d.SetY(y_);
+                //return static_cast< model_t< T >* >(self)->d.SetY(y_);
+                return call< wrapper::model_t >(self, &T::SetY, y_);
             });
             vtable::SetZImpl = (SF)([](void* self, float z_) {
-                return reinterpret_cast< model_t< T >* >(self)->d.SetZ(z_);
+                //return static_cast< model_t< T >* >(self)->d.SetZ(z_);
+                return call< wrapper::model_t >(self, &T::SetZ, z_);
             });
             vtable::SetWImpl = (SF)([](void* self, float w_) {
-                return reinterpret_cast< model_t< T >* >(self)->d.SetW(w_);
+                //return static_cast< model_t< T >* >(self)->d.SetW(w_);
+                return call< wrapper::model_t >(self, &T::SetW, w_);
             });
             CopyImpl = (CP)([](const void* self) {
-                return reinterpret_cast< const model_t< T >* >(self)->Copy();
+                return static_cast< const model_t< T >* >(self)->Copy();
+                //return call< wrapper::model_t >(p, &T::SetX, x_);
             });
             DestroyImpl = (D)([](void* self) {
-                reinterpret_cast< model_t< T >* >(self)->d.T::~T();
+                //static_cast< model_t< T >* >(self)->d.T::~T();
+                call_destructor< wrapper::model_t, T >(self);
             });
             }
         }
@@ -856,7 +893,7 @@ wrapper8_t::COPY wrapper8_t::Copy;
 //http://assemblyrequired.crashworks.org/2009/01/19/how-slow-are-virtual-functions-really
 //------------------------------------------------------------------------------
 class Vector4TestV /*final*/ {
-  float x = 0, y = 0, z = 0, w = 0;
+    float x = 0, y = 0, z = 0, w = 0;
 public:
     VIR float GetX() const  { return x; }
     VIR float GetY() const  { return y; }
@@ -870,7 +907,7 @@ public:
 };
 
 class Vector4Test {
-  float x = 0, y = 0, z = 0, w = 0;
+    float x = 0, y = 0, z = 0, w = 0;
 public:
     float GetX() const { return x; }
     float GetY() const { return y; }
@@ -1176,7 +1213,7 @@ int main(int argc, char** argv) {
     t2 = myclock_t::now();
     d = t2 - t1;
     data.push_back(make_pair("Callbacks:                       ", d));     
-    
+
     using P = pair< string, duration >;
     sort(data.begin(), data.end(), [](const P& v1, const P& v2) {
         return v1.second < v2.second;
