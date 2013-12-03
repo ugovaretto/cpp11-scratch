@@ -40,7 +40,7 @@ public:
         std::unique_lock< std::mutex > lock(mutex_);
         //stop and wait for notification if condition is false;
         //continue otherwise
-        cond_.wait(lock, [this]{ return !queue_.empty();});
+        cond_.wait(lock, [this]{return !queue_.empty();});
         T e = queue_.back();
         queue_.pop_back();
         return e;
@@ -275,21 +275,22 @@ int main(int argc, char** argv) {
         Executor exec(numthreads);
         Executor exec_aux(1);
         string msg = "start\n";
-        //if single threaded use
-        ConcurrentAccess< string& > s(msg, numthreads > 1 ? exec : exec_aux);
+        //if single threaded use a different executor for concurrent access
+        //if not it deadlocks
+        ConcurrentAccess< string& > text(msg, numthreads > 1 ? exec : exec_aux);
         vector< future< void > > v;
         for(int i = 0; i != numtasks; ++i)
             v.push_back(exec([&, i]{
                 std::this_thread::sleep_for(
                     std::chrono::milliseconds(sleeptime_ms));
-                s([=](string& s) {
+                text([=](string& s) {
                     s += to_string(i) + " " + to_string(i);
                     s += "\n";
                     return 0; //<- !!! Need a return value since void return
                               //   type not supported yet
                 });
-                s([](string& s) {
-                     cout << s;
+                text([](const string& s) {
+                    cout << s;
                     return 0; //<- !!! Need a return value since void return
                               //   type not supported yet
                 });
