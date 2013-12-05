@@ -350,11 +350,3 @@ int main(int argc, char** argv) {
     }    
     return 0;    
 }
-
-//SAMPLE OUTPUT: no arguments
-// Testing Executor...OK
-//
-// Run-time configuration:
-//   20 tasks
-//   4 threads
-//   0 ms task sleep time
