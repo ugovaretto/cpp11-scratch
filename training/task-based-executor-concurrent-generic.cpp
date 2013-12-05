@@ -1,5 +1,6 @@
 //Author: Ugo Varetto
 //Implementation of task-based concurrency (similar to Java's Executor)
+//and wrapper for concurrent access
 //gcc >= 4.8 or clang llvm >= 3.2 with libc++ required
 //
 //do specify -pthread when compiling if not you'll get a run-time error
@@ -18,6 +19,7 @@
 #include <algorithm>
 #include <map>
 #include <cstdlib> //EXIT_*
+#include <sstream>
 
 //------------------------------------------------------------------------------
 //synchronized queue (could be an inner class inside Executor):
@@ -239,6 +241,9 @@ class ConcurrentAccess {
     SyncQueue< std::function< void () > > queue_;
     std::future< void > f_;
 public:
+    ConcurrentAccess() = delete;
+    ConcurrentAccess(const ConcurrentAccess&) = delete;
+    ConcurrentAccess(ConcurrentAccess&&) = delete; 
     ConcurrentAccess(T data, Executor& e) : data_(data), 
         f_(e([=]{
                 while(!done_) queue_.Pop()();
@@ -289,7 +294,10 @@ public:
     }
 };
 
-
+template < typename...Args >
+struct {
+    tuple< Args... > args;
+}
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
@@ -317,18 +325,20 @@ int main(int argc, char** argv) {
         string msg = "start\n";
         //if single threaded use a different executor for concurrent access
         //if not it deadlocks
-        ConcurrentAccess< string& > s(msg, numthreads > 1 ? exec : exec_aux);
+        ConcurrentAccess< string& > text(msg, numthreads > 1 ? exec : exec_aux);
         vector< future< void > > v;
+        cout << this_thread::get_id() << endl;
         for(int i = 0; i != numtasks; ++i)
             v.push_back(exec([&, i]{
-                std::this_thread::sleep_for(
+                const thread::id calling_thread = this_thread::get_id();
+                std::this_thread::sleep_for( 
                     std::chrono::milliseconds(sleeptime_ms));
                 text([=](string& s){
                     s += to_string(i) + " " + to_string(i);
                     s += "\n";
                 });
                 text([](const string& s){
-                    cout << s;
+                    cout << s; 
                 });
             }));
         for(auto& f: v) f.wait();

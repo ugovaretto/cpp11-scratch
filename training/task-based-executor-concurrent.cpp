@@ -1,5 +1,6 @@
 //Author: Ugo Varetto
 //Implementation of task-based concurrency (similar to Java's Executor)
+//and wrapper for concurrent access
 //gcc >= 4.8 or clang llvm >= 3.2 with libc++ required
 //
 //do specify -pthread when compiling if not you'll get a run-time error
