@@ -4,7 +4,7 @@
 //gcc >= 4.8 or clang llvm >= 3.2 with libc++ required
 //
 //do specify -pthread when compiling if not you'll get a run-time error
-//g++ executor.cpp -std=c++11 -pthread 
+//g++ task-based-executor-concurrent-generic.cpp -std=c++11 -pthread 
 
 #include <iostream>
 #include <condition_variable>
