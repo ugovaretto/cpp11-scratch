@@ -328,7 +328,7 @@ int main(int argc, char** argv) {
                 const thread::id calling_thread = this_thread::get_id();
                 std::this_thread::sleep_for( 
                     std::chrono::milliseconds(sleeptime_ms));
-                text([=, this](string& s){
+                text([=](string& s){
                     s += to_string(i) + " " + to_string(i);
                     s += "\n";
                 });
