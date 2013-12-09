@@ -294,11 +294,6 @@ public:
     }
 };
 
-template < typename...Args >
-struct {
-    tuple< Args... > args;
-}
-
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
     try {
@@ -333,7 +328,7 @@ int main(int argc, char** argv) {
                 const thread::id calling_thread = this_thread::get_id();
                 std::this_thread::sleep_for( 
                     std::chrono::milliseconds(sleeptime_ms));
-                text([=](string& s){
+                text([=, this](string& s){
                     s += to_string(i) + " " + to_string(i);
                     s += "\n";
                 });
