@@ -3,7 +3,7 @@
 
 //------------------------------------------------------------------------------
 //overloaded functions called by Forward function
-void Overfoo(int&arg) { std::cout << "L-value\n"; }
+void Overfoo(int& arg) { std::cout << "L-value\n"; }
 void Overfoo(int const &arg) { std::cout << "const L-value\n"; }
 void Overfoo(int&& arg) { std::cout << "R-value\n"; }
 //note: returning a const r-value reference is useful to forbid code to use
