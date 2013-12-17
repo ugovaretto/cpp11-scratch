@@ -79,7 +79,6 @@ int main() {
     
     //the following line *does not fail* because there is no static assert
     //in R's implementation
-    //int& ri = MyForward<int&>(2);
-    
+    //int& ri = MyForward<int&>(2);    
     return 0;
 }
