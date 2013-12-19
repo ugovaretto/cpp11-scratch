@@ -77,12 +77,14 @@ using namespace std;
 #define VIR virtual
 #endif
 
-template < template < class Y > class M, typename R, typename T, typename... ArgTypes >
+template < template < class Y > class M, typename R, typename T,
+           typename... ArgTypes >
 R call(void* p, R (T::*m)(ArgTypes...), ArgTypes...args) {
     return (static_cast< M< T >* >(p)->d.*m)(args...);
 }
 
-template < template < class Y > class M, typename R, typename T, typename... ArgTypes >
+template < template < class Y > class M, typename R, typename T,
+           typename... ArgTypes >
 R call(const void* p, R (T::*m)(ArgTypes...) const, ArgTypes...args) {
     return (static_cast< const M< T >* >(p)->d.*m)(args...);
 }

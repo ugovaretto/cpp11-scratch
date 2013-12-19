@@ -3,20 +3,22 @@
 #include <iterator>
 #include <memory>
 
+
+
 template < typename K,
            typename T >
-class node_t {
+class treemap_t {
     std::vector< K > key_;
     std::vector< T > data_;
-    std::unique_ptr< node_t > less_;
-    std::unique_ptr< node_t > geq_;
+    std::unique_ptr< treemap_t > less_;
+    std::unique_ptr< treemap_t > geq_;
 public:
-    node_t(const node_t& n) : key_(n.key_), data_(n.data_) {
-        if(n.less_) less_ = new node_t(n.less_);
-        if(n.geq_)  geq_  = new node_t(n.geq_);
+    treemap_t(const treemap_t& n) : key_(n.key_), data_(n.data_) {
+        if(n.less_) less_ = new treemap_t(n.less_);
+        if(n.geq_)  geq_  = new treemap_t(n.geq_);
     }
-    node_t(node_t&& n) = default;
-    node_t& operator=(node_t n) {
+    treemap_t(treemap_t&& n) = default;
+    treemap_t& operator=(treemap_t n) {
         key_ = std::move(n.key_);
         data_ = std::move(n.data_);
         less_ = n.less_;
@@ -29,10 +31,10 @@ public:
             return; 
         }
         if(std::lexicographical_compare(k.begin(), k.end(), key_.begin())) {
-            if(!less_) less_ = new node_t;
+            if(!less_) less_ = new treemap_t;
             less_->add(k, v); 
         } else {
-            if(!geq_) geq_ = new node_t;
+            if(!geq_) geq_ = new treemap_t;
             geq_->add(k, v);
         }
     }
@@ -66,6 +68,6 @@ public:
 
 
 int main(int, char**) {
-    node_t< char, int > n;
+    treemap_t< char, int > n;
     return 0;
 }
