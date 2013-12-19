@@ -9,7 +9,7 @@
 //   reference types correctly generates a compile-time error, but a default
 //   constructor is required to initialize the base classes (see below)
 
-//ALL base classes are initialized by the most derived one (tuple_t), 
+//ALL virtual base classes are initialized by the most derived one (tuple_t), 
 //without an explicit default constructor tuple_storage_t cannot initialize
 //the base classes which in turn do not have a default constructor neither   
 //removing the default tuple_storage_t constructor you get:
