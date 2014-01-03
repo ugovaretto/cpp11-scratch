@@ -1,6 +1,6 @@
 //Author: Ugo Varetto
 //Shows how to apply a templated functor to all the elements
-//in a variadic argument list, run with both clang and gcc 
+//in a variadic argument list
 #include <iostream>
 #include <typeinfo>
 template < typename T > T Print(T v) { 
