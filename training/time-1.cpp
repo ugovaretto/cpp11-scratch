@@ -134,8 +134,7 @@ void SystemClock() {
     //the duration 'count' method returns the number of rational numbers 
     //stored into the duration instance one tick = "seconds in a week" in
     //this case;      
-    duration< system_clock::rep, Period >
-        one_week(2);
+    duration< system_clock::rep, Period > one_week(2);
 
     system_clock::time_point now = system_clock::now();
     system_clock::time_point last_week = now - one_week;
