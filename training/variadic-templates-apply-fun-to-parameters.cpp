@@ -3,6 +3,7 @@
 //in a variadic argument list
 #include <iostream>
 #include <typeinfo>
+
 template < typename T > T Print(T v) { 
     std::cout << v << std::endl;
     return v;
