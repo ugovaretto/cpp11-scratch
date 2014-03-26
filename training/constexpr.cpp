@@ -19,9 +19,11 @@ constexpr unsigned long long operator"" _f(unsigned long long f) {
 template < unsigned long long T >
 struct Temp {
     enum : unsigned long long {t = T};
-    constexpr operator unsigned long long () { return t; }
+    // operator must be const if not:
+    //clang++: warning: 'constexpr' non-static member function will not be 
+    //implicitly 'const' in C++1y; add 'const' to avoid a change in behavior
+    constexpr operator unsigned long long () const { return t; }
 };
-
 
 //------------------------------------------------------------------------------
 int main(int, char**) {
