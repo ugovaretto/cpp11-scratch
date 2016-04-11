@@ -2,7 +2,7 @@
 
 read >>= filter >>= print
 
-teamplate < typename T, typename F >
+template < typename T, typename F >
 State< typename F::return_type > operator >>=(State<T> m, F f) {
     State< typename F::return_type > s = f(m().result);
     return Combine(m.context, s.context, s.result); 
