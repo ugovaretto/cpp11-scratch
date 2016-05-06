@@ -38,13 +38,13 @@ struct Add {
 //only callable with a functor
 template < typename F, typename... ArgsT >
 typename result_of< F&&(ArgsT&&...) >::type Invoke(ArgsT&&...args) {
-    return F()(args...);
+    return F()(std::forward<ArgsT>(args)...);
 }
 
 //callable with both functor and regular free function
 template < typename F, typename... ArgsT >
 typename result_of< F&&(ArgsT&&...) >::type Invoke(F&& f, ArgsT&&...args) {
-    return f(args...);
+    return f(std::forward<ArgsT>(args)...);
 }
 
 void TestAdd() {
