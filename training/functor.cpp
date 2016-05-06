@@ -34,17 +34,16 @@ struct Add {
     int operator()(int a, int b) const { return a + b; }
 };
 
+//C++17-like invokers
 //only callable with a functor
 template < typename F, typename... ArgsT >
-auto Apply(ArgsT...args)
-    -> typename result_of< F(ArgsT...) >::type {
+typename result_of< F&&(ArgsT&&...) >::type Invoke(ArgsT&&...args) {
     return F()(args...);
 }
 
 //callable with both functor and regular free function
 template < typename F, typename... ArgsT >
-auto Apply(const F& f, ArgsT...args)
-        -> typename result_of< F(ArgsT...) >::type {
+typename result_of< F&&(ArgsT&&...) >::type Invoke(F&& f, ArgsT&&...args) {
     return f(args...);
 }
 
@@ -54,8 +53,8 @@ void TestAdd() {
     assert(AddFun(1,2) == 3);
     assert(AddCachedFun(1,2) == 3);
     assert(AddFun(1,2) == AddFun(1,2));
-    assert(Apply< Add >(1,2) == 3);
-    assert(Apply(Add(), 1,2) == 3);
+    assert(Invoke< Add >(1,2) == 3);
+    assert(Invoke(Add(), 1,2) == 3);
 }
 
 int main(int, char**) {
