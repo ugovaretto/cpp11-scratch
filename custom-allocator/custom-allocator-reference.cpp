@@ -14,24 +14,23 @@ template<typename T>
 class Allocator {
 public :
     using value_type = T;
-    using pointer = T *;                    // optional
-    using const_pointer = const T *;        // optional
-    using void_pointer = void *;            // optional
+    using pointer = T *;                     // optional
+    using const_pointer = const T *;         // optional
+    using void_pointer = void *;             // optional
     using const_void_pointer = const void *; // optional
-    using reference = T &;
-    using const_reference = const T &;
-    using size_type    = std::size_t;       // optional
-    using difference_type = std::ptrdiff_t; // optional
+    using reference = T&; // non-void only
+    using const_reference = const T&; // non-void only
+    using size_type = std::size_t;           // optional - non-void only
+    using difference_type = std::ptrdiff_t;  // optional - non-void only
     // Allocator< T > -> Allocator< U >
-    template<typename U>                    // optional
+    template<typename U>                     // optional
     struct rebind {
         typedef Allocator<U> other;
     };
     //C++14
     using propagate_on_container_move_assignment = std::true_type;
     //C++17
-    using is_always_equal =    std::true_type;
-
+    using is_always_equal = std::true_type;
 public :
     explicit Allocator() { }
 
