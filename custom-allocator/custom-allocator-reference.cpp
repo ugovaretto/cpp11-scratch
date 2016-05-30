@@ -78,23 +78,29 @@ public :
 #include <iostream>
 template < typename T >
 struct MinimalAllocator {
+    //required
     using value_type = T;
     T* allocate(size_t n) {
-        std::cout << "\tallocate(" << n << ")\n";
+        std::cout << "\tallocator::allocate(" << n << ")\n";
         return reinterpret_cast< T* >(::operator new(n * sizeof(T)));
     }
     void deallocate(T* p, size_t n) {
-        std::cout << "\tdeallocate(" << n << ")\n";
+        std::cout << "\tallocator::deallocate(" << n << ")\n";
         delete(p);
+    }
+    //optional
+    MinimalAllocator(int id) {
+        std::cout << "\tallocator constructor - id: " << id << "\n";
+    }
+    MinimalAllocator(const MinimalAllocator& ma) : MinimalAllocator(0) {
+        std::cout << "\tallocator copy constructor" << "\n";
     }
 };
 
 
-
 #include <string>
 #include <vector>
-#include <thread>
-#include <chrono>
+
 using namespace std;
 
 int main(int, char **) {
@@ -110,7 +116,6 @@ int main(int, char **) {
     a1.deallocate(a, 10);
 
     Allocator<std::string> a2;
-
 
     decltype(a1)::rebind<string>::other a2_1;
 
@@ -132,9 +137,9 @@ int main(int, char **) {
     //in C++ >= 11 access to allocator happens through std::allocator_traits
     {
         cout << "\n";
-        vector<int, MinimalAllocator<int >> vm;
+        cout << "vector::vector()\n";
+        vector<int, MinimalAllocator<int >> vm(MinimalAllocator<int>(3));
         cout << "vector::assign\n";
-        this_thread::sleep_for(5s);
         vm = {1, 2, 3};
         cout << "vector::push_back\n";
         vm.push_back(4);
@@ -142,23 +147,45 @@ int main(int, char **) {
         vm.push_back(5);
         cout << "vector::pop_back\n";
         vm.pop_back();
+        cout << "vector::vector(const vector&)\n";
+        vector< int, MinimalAllocator<int>> vm2 = vm;
         cout << "vector::shrink_to_fit\n";
         vm.shrink_to_fit();
         cout << "vector::~vector\n";
     }
 // clang version: Apple LLVM version 6.0 (clang-600.0.57) (based on LLVM 3.5svn)
-// vector::assign
-//            allocate(3)
+//    vector::vector()
+//    allocator constructor - id: 3
+//    allocator constructor - id: 0
+//    allocator copy constructor
+//    allocator constructor - id: 0
+//    allocator copy constructor
+//    allocator constructor - id: 0
+//    allocator copy constructor
+//    vector::assign
+//            allocator::allocate(3)
 //    vector::push_back
-//            allocate(6)
-//    deallocate(3)
+//            allocator::allocate(6)
+//    allocator::deallocate(3)
 //    vector::push_back
 //            vector::pop_back
+//    vector::vector(const vector&)
+//    allocator constructor - id: 0
+//    allocator copy constructor
+//    allocator constructor - id: 0
+//    allocator copy constructor
+//    allocator constructor - id: 0
+//    allocator copy constructor
+//    allocator constructor - id: 0
+//    allocator copy constructor
+//    allocator::allocate(4)
 //    vector::shrink_to_fit
-//            allocate(4)
-//    deallocate(6)
+//            allocator::allocate(4)
+//    allocator::deallocate(6)
 //    vector::~vector
-//            deallocate(4)
+//            allocator::deallocate(4)
+//            allocator::deallocate(4)
+
 
     return 0;
 }
