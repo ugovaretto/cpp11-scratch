@@ -9,10 +9,10 @@ module;
 //         an endlesserror message loop when compiling
 
 export module t_io;
-import <iostream>;
+//import <iostream>;
 // works fine with GCC-11, broken with CLang, see errors below, importing
 // iosfwd and string won't fix the problem
-
+import <iostream>;
 //import <iosfwd>;
 //import <string>;
 export
@@ -24,7 +24,7 @@ void Print(const T& p) {
 //gcc-11
 //#including instead of importing results in the address of 'p' being printed
 //importing works as expected
-//std::string does not work: endless loop
+//std::string does not work: endless error endless message loop
 
 //clang-12 BROKEN:
 // In file included from ../import_template.cpp:1:

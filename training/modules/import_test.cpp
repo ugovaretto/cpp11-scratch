@@ -25,7 +25,8 @@
 // when compiling modules
 
 
-import <iostream>;
+//import <iostream>;
+#include <iostream>
 
 int main(int argc, const char** argv) {
     std::cout << "Hello Modules!" << std::endl;
