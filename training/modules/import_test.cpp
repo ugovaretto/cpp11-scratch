@@ -17,10 +17,12 @@
 //install (Ubuntu/Debian):
 // sudo apt install clang-12 libc++-12-dev libc++abi-12-dev
 //
-//CLang has already pre-build stdlib modules when libc++ is used
-//and does not require explicit compilation of iostream
+//CLang has already pre-built stdlib modules when libc++ is used
+//and does not require explicit compilation of iostream...
 //
 // clang++ -std=c++20 -fmodules -stdlib=libc++ ../import_test.cpp
+// ...but it does require explicit generation of module interface files
+// when compiling modules
 
 
 import <iostream>;
