@@ -47,8 +47,8 @@ using namespace CORO;
 class Resumable {
    public:
     struct Promise {
-        Promise() { cout << "Promise constructor" << endl; }
-        ~Promise() { cout << "Promise destructor" << endl; }
+        Promise() { cout << "Promise::Promise" << endl; }
+        ~Promise() { cout << "Promise::~Promise" << endl; }
         auto get_return_object() noexcept {
             return Resumable(coroutine_handle<Promise>::from_promise(*this));
         }
@@ -56,20 +56,24 @@ class Resumable {
         // the coroutine starts in a suspended state and will not be executed
         // unless resume() is called
         auto initial_suspend() noexcept {
-            cout << "Initial suspend: "
+            cout << "Promise::initial_suspend(): "
                  << "suspend_always()" << endl;
             return suspend_always();
         }
         // The behavior is undefined if destroying is needed and *this does not
-        // refer a suspended coroutine.!!!
+        // refer to a suspended coroutine.!!!
         auto final_suspend() noexcept {
-            cout << "Final suspend: "
+            cout << "Promise::final_suspend(): "
                  << "suspend_always()" << endl;
             return suspend_always();
         }
         // required when co_return used
         // void return_void() {}
-        void unhandled_exception() { throw; }
+        // void return_value(T v) {}
+        void unhandled_exception() {
+            cout << "Promise::unhandled_exception()" << endl;
+            throw;
+        }
         // state accessed from awaitable
         int count{};
         milliseconds d_;
@@ -78,23 +82,26 @@ class Resumable {
 
    private:
     explicit Resumable(coroutine_handle<Promise> h) : h_(h) {
-        cout << "Resumable constructor" << endl;
+        cout << "Resumable::Resumable(coroutine_handle<Promise>)" << endl;
     }
     coroutine_handle<Promise> h_;
 
    public:
+    // mandatory:
     using promise_type = Promise;
     ~Resumable() {
-        cout << "Resumable Destructor>"
+        cout << "Resumable::~Resumable()>"
              << "\t" << this << endl;
+        // WARNING: co-routine MUST be in a suspended state if not
+        // destroy() will trigger an exception
         if (h_ && h_.done()) {
             h_.destroy();
         }
     }
     void operator()() { Resume(); }
-    operator bool () const { return Done(); } 
+    operator bool() const { return Done(); }
     void Resume() {
-        if (h_ && !h_.done()) h_(); // operator () invokes resume
+        if (h_ && !h_.done()) h_.resume();  // operator () invokes resume
     }
     bool Done() const { return h_.done(); }
     string operator()(const string& msg) {
@@ -119,7 +126,8 @@ auto operator co_await(tuple<duration<Rep, Period>, int> p) {
         system_clock::duration d_;
         int limit_{};
         Awaitable(duration<Rep, Period> d, int limit) : d_(d), limit_(limit) {
-            std::cout << "Constructor>\t" << this << endl;
+            std::cout << "Awaitable::Awaitable(duration<Rep, Period>, int)>\t"
+                      << this << endl;
         }
         // the following contructors are never called
         // Awaitable(Awaitable&& a) : d_(exchange(a.d_, {})) {
@@ -135,35 +143,39 @@ auto operator co_await(tuple<duration<Rep, Period>, int> p) {
         //   else call await_suspend THEN call await_resume after
         //        await_suspend returns
         bool await_ready() const {
-            std::cout << "Ready>\t\t" << this << endl;
+            std::cout << "Awaitable::await_ready() false>\t\t" << this << endl;
             return false;
             // return d_.count() <= 0;
         }
         // called IF AND ONLY IF await_ready returns 'false'
-        void await_suspend(CORO::coroutine_handle<Resumable::Promise> h) {
-            cout << "Suspend>\t" << this << endl;
-            cout << "\tsleeping..." << endl;
+        //‘await_suspend’ must return ‘void’, ‘bool’ or a coroutine handle
+        void await_suspend(coroutine_handle<Resumable::Promise> h) {
+            cout << "Awaitable::await_suspend(coroutine_handle<Resumable::"
+                    "Promise>)>\t"
+                 << this << endl;
+            cout << "\tsleeping..." << duration_cast<milliseconds>(d_).count() <<  endl;
             this_thread::sleep_for(d_);
-            cout << "\tCount: " << h.promise().count
-                 << " Elapsed: " << h.promise().d_.count() << " ms" << endl;
             h.promise().count++;
             h.promise().d_ += duration_cast<decltype(h.promise().d_)>(d_);
+            cout << "\tCount: " << h.promise().count
+                 << " Elapsed: " << h.promise().d_.count() << " ms" << endl;
+            
         }
         // co_await <expression> returns what await_resume returns
         // return false if number of invocations < limit, true signale 'done'
         bool await_resume() {
-            cout << "Resume>\t\t" << this << endl;
+            cout << "Awaitable::await_resume>\t\t" << this << endl;
             return x++ >= limit_;
         }
-        ~Awaitable() { cout << "Destructor>\t" << this << endl << endl; }
+        ~Awaitable() { cout << "Awaitable::~Awaitable()\t" << this << endl << endl; }
     };
     return Awaitable(get<0>(p), get<1>(p));
 }
 
-template< typename Rep, typename P>
-Resumable coro(duration<Rep, P> d,  int c) {
-    bool done = false;
-    while (!done) done = co_await make_tuple(d,c);
+template <typename Rep, typename P>
+Resumable coro(duration<Rep, P> d, int c) {
+    while (!co_await make_tuple(d, c))
+        ;
     // co_return;
 }
 
@@ -171,7 +183,11 @@ int main(int argc, char const* argv[]) {
     const int count = 2;
     auto sleepTime = 500ms;
     auto c = coro(sleepTime, count);
-    while (!c) c();
+    cout << endl;
+    while (!c) {
+        cout << "Resumable::operator ()" << endl << endl;
+        c();
+    }
     cout << endl;
     return 0;
 }
