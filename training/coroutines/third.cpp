@@ -2,6 +2,7 @@
 #include <cstring>
 #include <iostream>
 #include <utility>
+#define __cpp_lib_jthread
 #include <thread>
 
 // pass co-routine around
@@ -42,7 +43,7 @@ class Resumable {
     using promise_type = Promise;
     Resumable(Resumable&& r) : h_(std::exchange(r.h_, {})) {}
     ~Resumable() {
-        if (h_) h_.destroy();
+        if (h_ && h_.done()) h_.destroy();
     }
     bool resume() {
         if (!h_.done()) {
@@ -66,11 +67,12 @@ auto CoRoFactory() {
 int main(int, char**) {
     auto r = CoRoFactory();
     r.resume();
-    auto t = std::jthread{[r = std::move(r)]() mutable {
+    auto t = std::thread{[x = std::move(r)]() mutable {
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(2s);
-        r.resume();
+        x.resume();
     }};
+    t.join();
     std::cout << std::endl;
     return 0;
 }

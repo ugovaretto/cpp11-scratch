@@ -9,16 +9,7 @@
 //   #include <experimental/...>
 //   namespace std::experimental::... 
 
-// NOT: __GNUC__ might be defined even when using CLang
-#if defined(__GNUC__) && !defined(__clang__)
-#include <coroutine>
-namespace CORO = std;
-#elif defined(__clang__)
-#include <experimental/coroutine>
-namespace CORO = std::experimental;
-#else
-#error Unsupported compiler
-#endif
+#include "coroutines.h"
 
 class Resumable {
     struct Promise {
@@ -39,7 +30,7 @@ class Resumable {
     using promise_type = Promise;
     Resumable(Resumable&& r) : h_(std::exchange(r.h_, {})) {}
     ~Resumable() {
-        if (h_) h_.destroy();
+        if (h_ && h_.done()) h_.destroy();
     }
     bool resume() {
         if (!h_.done()) {

@@ -52,12 +52,12 @@ struct MemPool {
         }
     }
     template <typename F>
-    bool Delete(void* ptr, F&& deleteFun) {
+    bool Destroy(void* ptr, F&& destroyFun) {
         auto f = alloc_.find(ptr);
         if(f == alloc_.end()) return false;
         else {
             const size_t i = f->second;
-            deleteFun(&chunks_[i]);
+            destroyFun(&chunks_[i]);
             alloc_.erase(f);
             return true;
         }
@@ -101,10 +101,10 @@ struct MemPools {
         return p;
     }
     template <typename F>
-    bool Delete(void* ptr, F&& deleteFun = [](void* ptr){ delete ptr;}) {
+    bool Destroy(void* ptr, F&& destroyFun = [](void* ){}) {
         auto i = ptrPool_.find(ptr);
         if(i == ptrPool_.end()) return false;
-        i->second->Delete(ptr, deleteFun);
+        i->second->Destroy(ptr, destroyFun);
         ptrPool_.erase(i);
         return true;
     }
@@ -132,7 +132,7 @@ class Resumable {
         }
         static void operator delete  (void* ptr) noexcept {
             std::cout << "custom delete called" << std::endl;
-            if(!memPoolsG.Delete(ptr, [](void* p){ 
+            if(!memPoolsG.Destroy(ptr, [](void* p){ 
                 reinterpret_cast<Promise*>(p)->~Promise();
                 })) ::operator delete(ptr);
         }
@@ -142,7 +142,7 @@ class Resumable {
 
    public:
     using promise_type = Promise;
-    Resumable(Resumable&& r) : h_(std::exchange(r.h_, {})) {}
+    //Resumable(Resumable&& r) : h_(std::exchange(r.h_, {})) {}
     ~Resumable() {
         if (h_) h_.destroy();
     }
@@ -156,9 +156,9 @@ class Resumable {
 
 /// create coroutine
 auto coroutine() -> Resumable {
-    std::cout << "  3 ";
+    std::cout << "  3 " << " Suspend...";
     co_await CORO::suspend_always{};
-    std::cout << "  5 ";
+    std::cout << "Resume " << "  5 ";
 }
 
 //
