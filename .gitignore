@@ -2,7 +2,8 @@ tmp*
 .DS_Store
 .idea
 .vscode
-.out
+.out*
 .a
 .so
 ~*
+build
