@@ -1,6 +1,8 @@
 #include <cassert>
 #include <cmath>
-#include <concepts>
+#if !defined(__clang__)
+#include <concepts> //cannot make std::concept to work on apple clang 13 
+#endif
 #include <iostream>
 #include <vector>
 #include <utility>
@@ -50,9 +52,9 @@ class Generator {
             h_.resume();
             return *this;
         }
-        void operator++(int) { return (void)operator++(); }
+        auto operator++(int) { return operator++(); }
         const T& operator*() const { return h_.promise().value_; }
-        T* operator->() const { return std::addressof(operator*()); }
+        const T* operator->() const { return std::addressof(operator*()); }
         bool operator==(Sentinel) const { return h_.done(); }
     };
 
@@ -95,7 +97,9 @@ auto LinSpaceEager(T start, T stop, size_t n) {
 
 // lazy callback
 template <typename T, typename F>
-requires std::invocable<F&, const T&>
+#if !defined(__clang__)
+std::invocable<F, const T&> //cannot make std::concept to work on apple clang 13
+#endif
 void LinSpaceCBack(T start, T stop, size_t n, F&& f) {
     for (auto i = 0u; i != n; ++i) f(LinValue(start, stop, i, n));
 }
@@ -110,8 +114,9 @@ struct LinSpace {
         using reference = value_type /*&*/;
         using pointer = value_type*;
         using difference_type = void;
-        void operator++() { ++i_; }
+        auto operator++() { return ++i_; }
         bool operator==(size_t i) const { return i == i_; }
+        bool operator==(const Iterator& it) const { return it.i_ == i_;}
         value_type operator*() { return LinValue(start_, stop_, i_, n_); }
         T start_{};
         T stop_{};

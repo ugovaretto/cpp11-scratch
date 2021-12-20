@@ -38,10 +38,11 @@ struct MemPool {
     enum Size: size_t {
         ChunkSize = S
     };
+    using Index = size_t;
     using Chunk = std::array<T, ChunkSize>;
     std::vector<Chunk> chunks_;
-    std::unordered_map<void*, size_t> alloc_;
-    std::unordered_set<size_t> free_;
+    std::unordered_map<void*, Index> alloc_;
+    std::unordered_set<Index> free_;
     void* Alloc(size_t sz) {
         if(sz > ChunkSize || free_.empty()) return nullptr;
         else {
@@ -58,7 +59,7 @@ struct MemPool {
         else {
             const size_t i = f->second;
             destroyFun(&chunks_[i]);
-            alloc_.erase(f);
+            free_.insert(std::move(alloc_.extract(f).mapped()));
             return true;
         }
     }

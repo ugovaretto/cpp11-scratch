@@ -3,6 +3,7 @@
 #include <string>
 
 using namespace CORO;
+using namespace std;
 
 struct LifeTimeInspector {
   LifeTimeInspector(const std::string& m) : s(m) {
@@ -21,8 +22,14 @@ struct HelloCoroutine {
     HelloCoroutine get_return_object() {
       return coroutine_handle<HelloPromise>::from_promise(*this);
     }
-    suspend_never initial_suspend() {return {};}
-    suspend_always final_suspend() noexcept {return {};}
+    suspend_never initial_suspend() {
+      cout << "initial_suspend()" << endl;
+      return {};
+    }
+    suspend_always final_suspend() noexcept {
+      cout << "final_suspend()" << endl;
+      return {};
+    }
     void return_value(int value) { 
       std::cout << "got " << value << "\n";
       value_ = value;
@@ -46,6 +53,7 @@ HelloCoroutine count_to_ten() {
     }
     std::cout << i << std::endl;
   }
+  cout << "Completed" << endl;
   co_return 42;
 }
 

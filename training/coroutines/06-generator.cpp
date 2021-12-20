@@ -53,9 +53,9 @@ class Generator {
             h_.resume();
             return *this;
         }
-        void operator++(int) { return (void)operator++(); }
+        auto operator++(int) { return operator++(); }
         const T& operator*() const { return h_.promise().value_; }
-        T* operator->() const { return std::addressof(operator*()); }
+        const T* operator->() const { return std::addressof(operator*()); }
         bool operator==(Sentinel) const { return h_.done(); }
     };
 
@@ -66,7 +66,7 @@ class Generator {
     using promise_type = Promise;
     Generator(Generator&& g) : h_(std::exchange(g.h_, {})) {}
     ~Generator() {
-        if (h_) h_.destroy();
+        if (h_ && h_.done()) h_.destroy();
     }
     auto begin() {
         h_.resume();
@@ -75,13 +75,13 @@ class Generator {
     auto end() { return Sentinel{}; }
 };
 
-template <typename T>
-auto Seq() -> Generator<T> {
+template <typename T, template <typename> typename Gen>
+auto Seq() -> Gen<T> {
     for (T i = {};; ++i) co_yield i;
 }
 
-template <typename T>
-auto TakeUntil(Generator<T>& gen, T value) -> Generator<T> {
+template <typename T, template <typename> typename Gen>
+auto TakeUntil(Gen<T>&& gen, T value) -> Gen<T> {
     for (auto&& v : gen) {
         //‘co_return’ cannot be used in a function with a deduced return type
         if (v == value) co_return;
@@ -89,17 +89,18 @@ auto TakeUntil(Generator<T>& gen, T value) -> Generator<T> {
     }
 }
 
-template <typename T>
-auto Add(Generator<T>& gen, T adder) -> Generator<T> {
+template <typename T, template <typename> typename Gen>
+auto Add(Gen<T>&& gen, T adder) -> Gen<T> {
     for (auto&& v : gen) {
         co_yield v + adder;
     }
 }
 
 int main(int argc, const char** argv) {
-    auto s = Seq<int>();
-    auto t = TakeUntil<int>(s, 10);
-    auto a = Add<int>(t, 3);
+    //auto s = Seq<int>();
+    //auto t = TakeUntil<int>(s, 10);
+    //auto a = Add<int>(t, 3);
+    auto a = Add<int>(TakeUntil<int>(Seq<int, Generator>(), 10), 3);
     int sum = 0;
     for (auto&& v : a) sum += v;
     std::cout << sum << std::endl;  // returns 75
