@@ -11,6 +11,36 @@ using namespace std;
 using namespace chrono;
 using namespace CORO;
 
+// [main]
+// [Launch]
+// 1) Call Launch() -> Task<T> as 'task', and wait at subroutine start
+// [main]
+// 2) Resume Launch:
+//    2.1 execute Exec::Awaitable::await_ready() -> false
+//    2.2 execute Exec::Awaitable::suspend and return execution to caller
+// [WaitForTask]
+// 3) Call WaitForTask(task):
+//    3.1 Task<T>::await_ready() -> false
+//    3.2 Task<T>::suspend() -> Launch coroutine handler as 'launch'
+// [Launch]
+// 4) Resume Launch: call Exec::Awaitable::await_resume() -> 5550
+//    4.1 Task::Promise::return_value(5550)
+//    4.2 Task::Promise::final_suspend() -> Task<T>::Promise::Awaitable() as
+//    'awaitable' 4.3 awaitable.await_suspend() -> Launch 
+//    4.4 Task::Promise::Awaitable::await_suspend() -> WaitForTask coroutine
+// [WaitForTask]
+// 5) Resume WaitForTask coroutine: WaitTask<T>::Promise::return_value(5550)
+//    5.1 WaitTask<T>::final_suspend()
+// [main]
+
+
+// Offloading execution to another co-routine is achieved by returning
+// coroutine_handle<> from an await_suspend() method: when a couroutine_handle()
+// is returned it is interpreted as a continuation and ::resume() called
+// immediately.
+
+// Task execution is normally performed in the await_suspend() method.
+
 //------------------------------------------------------------------------------
 int lineIdxG = 1;
 struct LineNo {};
@@ -20,15 +50,18 @@ std::ostream& operator<<(std::ostream& os, LineNo) {
   return os;
 }
 //------------------------------------------------------------------------------
-// to co_await on a Task it needs to implement to awaitable interface
+// In order to co_await on a Task, the Task type needs to implement to
+// awaitable interface
 template <typename T>
 class [[nodiscard]] Task {
   struct Promise {
+    const char* name_ = "Task<T>::Promise";
     std::variant<std::monostate, T, std::exception_ptr> result_;
     // type erased handle, can hold any coroutine type
-    CORO::coroutine_handle<> continuation_;
+    coroutine_handle<> continuation_;
     auto get_return_object() noexcept { return Task{*this}; }
     void return_value(T value) {
+      cout << LineNo() << "Task<T>::Promise::return_value" << endl;
       result_.template emplace<1>(std::move(value));
     }
     void unhandled_exception() noexcept {
@@ -36,7 +69,6 @@ class [[nodiscard]] Task {
     }
     auto initial_suspend() {
       cout << LineNo() << "Task<T>::Promise::initial_suspend()" << endl;
-      ;
       return suspend_always{};
     }
     // when final_suspend returns an awaiter with a and await_suspend
@@ -50,6 +82,8 @@ class [[nodiscard]] Task {
         auto await_suspend(CORO::coroutine_handle<Promise> h) noexcept {
           cout << LineNo() << "Task<T>::Promise::Awaitable::await_suspend()"
                << endl;
+          // return coroutine (WaitForTask) to be resumed and invoke resume
+          // on coroutine which in turn invoke Task<T>::resume
           return h.promise().continuation_;
         }
         void await_resume() noexcept {
@@ -67,7 +101,7 @@ class [[nodiscard]] Task {
 
  public:
   using promise_type = Promise;
-  Task(Task&& t) noexcept : h_{exchange(t.h_, {})} {}
+  // Task(Task&& t) noexcept : h_{exchange(t.h_, {})} {}
   ~Task() {
     cout << LineNo() << "Task<T>::~Task(), coroutine done? " << boolalpha
          << h_.done() << endl;
@@ -78,13 +112,18 @@ class [[nodiscard]] Task {
     cout << LineNo() << "Task<T>::await_ready()" << endl;
     return false;
   }
-  auto await_suspend(CORO::coroutine_handle<> c) {
+  auto await_suspend(coroutine_handle<> c) {
     cout << LineNo() << "Task<T>::await_suspend()" << endl;
+    // record the coroutine (WaitForTask) to be resumed after coroutine (Launch)
+    // returning this Task instance completes
+    // returning Task<T> coroutine triggers an automatic call to
+    //(Task<T> coroutine handle).resume()
     h_.promise().continuation_ = c;
+    // return Launch (Task<T>) couroutine and automatically trigger resume on it
     return h_;
   }
   auto await_resume() -> T {
-    cout << LineNo() << "Task<T>::final_suspend()::await_resume()" << endl;
+    cout << LineNo() << "Task<T>::await_resume()" << endl;
     auto& result = h_.promise().result_;
     if (result.index() == 1) {
       return std::get<1>(std::move(result));
@@ -108,13 +147,13 @@ auto Exec(int m) {
       cout << LineNo() << "Exec::Awaitable::await_ready()" << endl;
       return false;
     }
-    void await_suspend(CORO::coroutine_handle<> h) {
+    void await_suspend(coroutine_handle<>) {
       cout << LineNo() << "Exec::Awaitable::await_suspend()" << endl;
       this_thread::sleep_for(2s);
       data_ = multiplier_ * 10;
     }
     int await_resume() const noexcept {
-      cout << LineNo() << "Exec::Awaitable::await_suspend()" << endl;
+      cout << LineNo() << "Exec::Awaitable::await_resume()" << endl;
       return data_;
     }
     Awaitable(int m) : multiplier_{m} {}
@@ -123,15 +162,16 @@ auto Exec(int m) {
 }
 
 //------------------------------------------------------------------------------
-Task<int> Launch(int i) { co_return co_await Exec(i); }
-
-//------------------------------------------------------------------------------
 template <typename T>
 struct WaitTask {
   struct Promise {
     T value_{};
+    const char* name_ = "WaitTask::Promise";
     auto get_return_object() noexcept { return WaitTask{*this}; }
-    void return_value(const T& v) { value_ = v; }
+    void return_value(const T& v) {
+      cout << LineNo() << "WaitTask<T>::Promise::return_value" << endl;
+      value_ = v;
+    }
     void unhandled_exception() noexcept {
       rethrow_exception(current_exception());
     }
@@ -160,7 +200,7 @@ class WaitTask<void> {
       rethrow_exception(current_exception());
     }
     auto initial_suspend() { return suspend_never{}; }
-    auto final_suspend() noexcept { return suspend_always{}; }
+    auto final_suspend() noexcept { return suspend_never{}; }
   };
 
  public:
@@ -172,7 +212,16 @@ class WaitTask<void> {
 //------------------------------------------------------------------------------
 template <typename T, template <typename> typename TaskT>
 WaitTask<T> WaitForTask(TaskT<T>& t) {
-  co_return co_await t;
+  auto r = co_await t;
+  cout << LineNo() << "WaitForTask() resumed" << endl;
+  co_return r;
+}
+
+//------------------------------------------------------------------------------
+Task<int> Launch(int i) {
+  auto r = co_await Exec(i);
+  cout << LineNo() << "Launch() resumed" << endl;
+  co_return r;
 }
 
 //------------------------------------------------------------------------------
@@ -191,47 +240,3 @@ int main(int, const char**) {
   cout << LineNo() << "finish" << endl;
   return 0;
 }
-
-//------------------------------------------------------------------------------
-//------------------------------------------------------------------------------
-// template <>
-// class [[nodiscard]] Task<void> {
-//   struct Promise {
-//     std::exception_ptr e_;   // No std::variant, only exception
-//     std::coroutine_handle<> continuation_;
-//     auto get_return_object() noexcept { return Task{*this}; }
-//     void return_void() {}   // Instead of return_value()
-//     void unhandled_exception() noexcept {
-//       e_ = std::current_exception();
-//     }
-//     auto initial_suspend() { return CORO::suspend_always{}; }
-//     auto final_suspend() noexcept {
-//       struct Awaitable {
-//         bool await_ready() noexcept { return false; }
-//         auto await_suspend(CORO::coroutine_handle<Promise> h) noexcept {
-//           return h.promise().continuation_;
-//         }
-//         void await_resume() noexcept {}
-//       };
-//       return Awaitable{};
-//     }
-//   };
-//   std::coroutine_handle<Promise> h_;
-//   explicit Task(Promise& p) noexcept
-//       : h_{std::coroutine_handle<Promise>::from_promise(p)} {}
-// public:
-//   using promise_type = Promise;
-
-//   Task(Task&& t) noexcept : h_{std::exchange(t.h_, {})} {}
-//   ~Task() { if (h_ && h_.done()) h_.destroy(); }
-//   // Awaitable interface
-//   bool await_ready() { return false; }
-//   auto await_suspend(std::coroutine_handle<> c) {
-//     h_.promise().continuation_ = c;
-//     return h_;
-//   }
-//   void await_resume() {
-//     if (h_.promise().e_)
-//       std::rethrow_exception(h_.promise().e_);
-//   }
-// };
