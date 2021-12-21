@@ -41,3 +41,28 @@
 //       std::rethrow_exception(h_.promise().e_);
 //   }
 // };
+
+//------------------------------------------------------------------------------
+template <>
+class WaitTask<void> {
+  struct Promise {
+    auto get_return_object() noexcept { return WaitTask{*this}; }
+    void return_void() {}
+    void unhandled_exception() noexcept {
+      rethrow_exception(current_exception());
+    }
+    auto initial_suspend() { return suspend_never{}; }
+    auto final_suspend() noexcept { return suspend_never{}; }
+  };
+
+ public:
+  using promise_type = Promise;
+  coroutine_handle<Promise> h_;
+  WaitTask(Promise& p) : h_(coroutine_handle<Promise>::from_promise(p)) {}
+};
+
+//------------------------------------------------------------------------------
+template <typename VoidTaskT>
+WaitTask<void> WaitForTask(VoidTaskT& t) {
+  co_await t;
+}

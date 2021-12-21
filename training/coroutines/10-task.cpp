@@ -41,6 +41,8 @@ using namespace CORO;
 
 // Task execution is normally performed in the await_suspend() method.
 
+// co_yield can be used instead of co_return for tasks
+
 //------------------------------------------------------------------------------
 int lineIdxG = 1;
 struct LineNo {};
@@ -190,24 +192,7 @@ struct WaitTask {
   const T& Get() const { return h_.promise().value_; }
 };
 
-//------------------------------------------------------------------------------
-template <>
-class WaitTask<void> {
-  struct Promise {
-    auto get_return_object() noexcept { return WaitTask{*this}; }
-    void return_void() {}
-    void unhandled_exception() noexcept {
-      rethrow_exception(current_exception());
-    }
-    auto initial_suspend() { return suspend_never{}; }
-    auto final_suspend() noexcept { return suspend_never{}; }
-  };
 
- public:
-  using promise_type = Promise;
-  coroutine_handle<Promise> h_;
-  WaitTask(Promise& p) : h_(coroutine_handle<Promise>::from_promise(p)) {}
-};
 
 //------------------------------------------------------------------------------
 template <typename T, template <typename> typename TaskT>
@@ -222,12 +207,6 @@ Task<int> Launch(int i) {
   auto r = co_await Exec(i);
   cout << LineNo() << "Launch() resumed" << endl;
   co_return r;
-}
-
-//------------------------------------------------------------------------------
-template <typename VoidTaskT>
-WaitTask<void> WaitForTask(VoidTaskT& t) {
-  co_await t;
 }
 
 //------------------------------------------------------------------------------
