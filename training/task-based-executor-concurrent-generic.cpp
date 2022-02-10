@@ -236,6 +236,10 @@ struct Void<void> {
     typedef VoidType type;
 };
 
+// Safe concurrent access to data by wrapping variable with object which
+// synchronizes access to resource.
+// Access can only happen by passing a functor which receives a reference to
+// the wrapped resource.
 template <typename T>
 class ConcurrentAccess {
     T data_;  // warning 'mutable' cannot be applied to references
